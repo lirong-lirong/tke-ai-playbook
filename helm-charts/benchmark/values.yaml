@@ -1,4 +1,4 @@
-benchName:sglang
+benchName: sglang
 backend: openai-chat
 endpoint: /v1/chat/completions
 modelName: deepseek-ai/DeepSeek-R1
