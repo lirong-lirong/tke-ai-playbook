@@ -1,14 +1,14 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ .Release.Name }}-{{ .Values.benchName }}
   namespace: {{ .Release.Namespace }}
   labels:
     app: {{ .Release.Name }}
 spec:
   template:
     metadata:
-      name: {{ .Release.Name }}
+      name: {{ .Release.Name }}-{{ .Values.benchName }}
       labels:
         app: {{ .Release.Name }}
     spec:
@@ -36,6 +36,6 @@ spec:
         - |
           set -ex
           cd /app
-          source ./vllm-venv/bin/activate
-          bash vllm-bench.sh
+          source ./{{ .Values.benchName }}-venv/bin/activate
+          bash {{ .Values.benchName }}-bench.sh
       restartPolicy: OnFailure
