@@ -47,7 +47,7 @@ cat <<EOF > /tmp/tke-ai-playbook/tke-llm-downloader.yaml
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ${JOB_NAME}
+  generateName: ${JOB_NAME}-
   labels:
     app: ${JOB_NAME}
 spec:
@@ -64,14 +64,14 @@ spec:
               topologyKey: kubernetes.io/hostname
               labelSelector:
                 matchExpressions:
-                - key: job-name
+                - key: app
                   operator: In
                   values:
                   - ${JOB_NAME}
       restartPolicy: Never
       containers:
       - name: downloader
-        image: tkeai.tencentcloudcr.com/tke-ai-playbook/llm-downloader:v0.0.2
+        image: tkeai.tencentcloudcr.com/tke-ai-playbook/llm-downloader:nightly
         env:
         - name: JOB_COMPLETION_TOTAL
           value: "${JOB_COMPLETION_TOTAL}"
@@ -88,13 +88,6 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /data
-        resources:
-          requests:
-            cpu: 1
-            memory: 2Gi
-          limits:
-            cpu: 1
-            memory: 2Gi
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -104,7 +97,6 @@ Info "Job to download the LLM model has been generated, see below:"
 cat /tmp/tke-ai-playbook/tke-llm-downloader.yaml
 Confirm "Do you want to create the job?(y/n): "
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-  ${KUBE_CMD} delete -f /tmp/tke-ai-playbook/tke-llm-downloader.yaml --ignore-not-found
   ${KUBE_CMD} create -f /tmp/tke-ai-playbook/tke-llm-downloader.yaml
   Success "Job created"
 fi
