@@ -1,0 +1,73 @@
+# 全局配置
+global:
+  name: sglang
+  namespace: default
+
+# LeaderWorkerSet 配置
+leaderWorkerSet:
+  replicas: 1
+  size: 2
+  restartPolicy: RecreateGroupOnPodRestart
+
+# 镜像配置
+image:
+  repository: sglang
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# 模型配置
+model:
+  hostPath: "/data/models"  # 主机模型路径
+  mountPath: "/work/models" # 容器挂载路径
+
+# 资源分配
+resources:
+  leader:
+    gpu: 8
+    cpu: 0
+    memory: 0
+  worker:
+    gpu: 8
+    cpu: 0
+    memory: 0
+
+# SGLang 服务器配置
+sglang:
+  # 通用参数
+  memFractionStatic: 0.93
+  torchCompileMaxBs: 8
+  maxRunningRequests: 20
+  tensorParallelism: 16
+  trustRemoteCode: true
+  
+  # Leader 专用参数
+  leader:
+    host: "0.0.0.0"
+    port: 40000
+    
+  # 网络配置
+  distInitPort: 20000
+  ncclIbGidIndex: 3
+
+# 网络配置
+network:
+  hostNetwork: true
+  hostIPC: true
+  dnsPolicy: ClusterFirstWithHostNet
+
+# 共享内存配置
+sharedMemory:
+  enabled: true
+  size: 32G
+
+# 服务配置
+service:
+  enabled: true
+  name: sglang-leader
+  type: ClusterIP
+  port: 40000
+  targetPort: 40000
+
+# LeaderWorkerSet CRD 安装控制
+leaderworkerset:
+  enabled: true

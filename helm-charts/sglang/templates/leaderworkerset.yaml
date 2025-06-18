@@ -1,0 +1,168 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: {{ .Values.global.name }}
+  namespace: {{ .Values.global.namespace }}
+spec:
+  replicas: {{ .Values.leaderWorkerSet.replicas }}
+  leaderWorkerTemplate:
+    size: {{ .Values.leaderWorkerSet.size }}
+    restartPolicy: {{ .Values.leaderWorkerSet.restartPolicy }}
+    leaderTemplate:
+      metadata:
+        labels:
+          role: leader
+      spec:
+        dnsPolicy: {{ .Values.network.dnsPolicy }}
+        hostNetwork: {{ .Values.network.hostNetwork }}
+        hostIPC: {{ .Values.network.hostIPC }}
+        containers:
+          - name: sglang-leader
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            securityContext:
+              privileged: true
+            env:
+              - name: NCCL_IB_GID_INDEX
+                value: "{{ .Values.sglang.ncclIbGidIndex }}"
+            command:
+              - python3
+              - -m
+              - sglang.launch_server
+              - --model-path
+              - {{ .Values.model.mountPath }}
+              - --mem-fraction-static
+              - "{{ .Values.sglang.memFractionStatic }}"
+              - --torch-compile-max-bs
+              - "{{ .Values.sglang.torchCompileMaxBs }}"
+              - --max-running-requests
+              - "{{ .Values.sglang.maxRunningRequests }}"
+              - --tp
+              - "{{ .Values.sglang.tensorParallelism }}"
+              - --dist-init-addr
+              - $(LWS_LEADER_ADDRESS):{{ .Values.sglang.distInitPort }}
+              - --nnodes
+              - $(LWS_GROUP_SIZE)
+              - --node-rank
+              - $(LWS_WORKER_INDEX)
+              {{- if .Values.sglang.trustRemoteCode }}
+              - --trust-remote-code
+              {{- end }}
+              - --host
+              - "{{ .Values.sglang.leader.host }}"
+              - --port
+              - "{{ .Values.sglang.leader.port }}"
+            resources:
+              limits:
+                {{- if gt .Values.resources.leader.gpu 0 }}
+                nvidia.com/gpu: "{{ .Values.resources.leader.gpu }}"
+                {{- end }}
+                {{- if gt .Values.resources.leader.cpu 0 }}
+                cpu: "{{ .Values.resources.leader.cpu }}"
+                {{- end }}
+                {{- if gt .Values.resources.leader.memory 0 }}
+                memory: "{{ .Values.resources.leader.memory }}"
+                {{- end }}
+            ports:
+              - containerPort: {{ .Values.sglang.leader.port }}
+            readinessProbe:
+              tcpSocket:
+                port: {{ .Values.sglang.leader.port }}
+              initialDelaySeconds: 15
+              periodSeconds: 10
+            volumeMounts:
+              {{- if .Values.sharedMemory.enabled }}
+              - mountPath: /dev/shm
+                name: dshm
+              {{- end }}
+              - name: model
+                mountPath: {{ .Values.model.mountPath }}
+              - name: ib
+                mountPath: /dev/infiniband
+        volumes:
+          {{- if .Values.sharedMemory.enabled }}
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              {{- if .Values.sharedMemory.size }}
+              sizeLimit: {{ .Values.sharedMemory.size }}
+              {{- end }}
+          {{- end }}
+          - name: model
+            hostPath:
+              path: {{ .Values.model.hostPath }}
+          - name: ib
+            hostPath:
+              path: /dev/infiniband
+    workerTemplate:
+      spec:
+        dnsPolicy: {{ .Values.network.dnsPolicy }}
+        hostNetwork: {{ .Values.network.hostNetwork }}
+        hostIPC: {{ .Values.network.hostIPC }}
+        containers:
+          - name: sglang-worker
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            securityContext:
+              privileged: true
+            env:
+            - name: NCCL_IB_GID_INDEX
+              value: "{{ .Values.sglang.ncclIbGidIndex }}"
+            command:
+              - python3
+              - -m
+              - sglang.launch_server
+              - --model-path
+              - {{ .Values.model.mountPath }}
+              - --mem-fraction-static
+              - "{{ .Values.sglang.memFractionStatic }}"
+              - --torch-compile-max-bs
+              - "{{ .Values.sglang.torchCompileMaxBs }}"
+              - --max-running-requests
+              - "{{ .Values.sglang.maxRunningRequests }}"
+              - --tp
+              - "{{ .Values.sglang.tensorParallelism }}"
+              - --dist-init-addr
+              - $(LWS_LEADER_ADDRESS):{{ .Values.sglang.distInitPort }}
+              - --nnodes
+              - $(LWS_GROUP_SIZE)
+              - --node-rank
+              - $(LWS_WORKER_INDEX)
+              {{- if .Values.sglang.trustRemoteCode }}
+              - --trust-remote-code
+              {{- end }}
+            resources:
+              limits:
+                {{- if gt .Values.resources.worker.gpu 0 }}
+                nvidia.com/gpu: "{{ .Values.resources.worker.gpu }}"
+                {{- end }}
+                {{- if gt .Values.resources.worker.cpu 0 }}
+                cpu: "{{ .Values.resources.worker.cpu }}"
+                {{- end }}
+                {{- if gt .Values.resources.worker.memory 0 }}
+                memory: "{{ .Values.resources.worker.memory }}"
+                {{- end }}
+            volumeMounts:
+              {{- if .Values.sharedMemory.enabled }}
+              - mountPath: /dev/shm
+                name: dshm
+              {{- end }}
+              - name: model
+                mountPath: {{ .Values.model.mountPath }}
+              - name: ib
+                mountPath: /dev/infiniband
+        volumes:
+          {{- if .Values.sharedMemory.enabled }}
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              {{- if .Values.sharedMemory.size }}
+              sizeLimit: {{ .Values.sharedMemory.size }}
+              {{- end }}
+          {{- end }}
+          - name: ib
+            hostPath:
+              path: /dev/infiniband
+          - name: model
+            hostPath:
+              path: {{ .Values.model.hostPath }}
