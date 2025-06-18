@@ -6,7 +6,7 @@ global:
 # LeaderWorkerSet 配置
 leaderWorkerSet:
   replicas: 1
-  size: 1
+  size: 2
   restartPolicy: RecreateGroupOnPodRestart
 
 # 镜像配置

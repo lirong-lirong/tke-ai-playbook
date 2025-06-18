@@ -13,34 +13,45 @@
 # 创建命名空间
 kubectl create namespace sglang
 
-# 安装 Chart
-helm install sglang ./sglang-leaderworkerset -n sglang \
-  --set model.hostPath="/path/to/your/models" \
-  --set resources.leader.gpu=8 \
-  --set resources.worker.gpu=8
+# 部署 SGLang 服务
+helm install sglang-service ./sglang-leaderworkerset -n sglang \
+	--set model.hostPath="/path/to/Qwen/Qwen3-32B" \
+	--set leaderWorkerSet.size=2 \
+	--set resources.leader.gpu=8 \
+	--set resources.worker.gpu=8 \
+	--set sglang.tensorParallelism=4 \
+	--set sglang.modelName="Qwen3-32B" \
+	--set model.mountPath="/work/models" 
 ```
 
-## 配置参数
+## 核心配置参数
 
-| 参数                         | 描述                        | 默认值           |
-| ---------------------------- | --------------------------- | ---------------- |
-| `global.name`              | 部署名称                    | `sglang`       |
-| `global.namespace`         | 命名空间                    | `default`      |
-| `leaderWorkerSet.replicas` | LeaderWorkerSet 副本数      | `1`            |
-| `leaderWorkerSet.size`     | 每组大小 (leader + workers) | `2`            |
-| `image.repository`         | SGLang 镜像仓库             | `sglang`       |
-| `image.tag`                | 镜像标签                    | `latest`       |
-| `model.hostPath`           | 主机模型路径                | `/data/models` |
-| `model.mountPath`          | 容器挂载路径                | `/work/models` |
-| `resources.leader.gpu`     | Leader GPU 数量             | `8`            |
-| `resources.worker.gpu`     | Worker GPU 数量             | `8`            |
-| `sglang.tensorParallelism` | 张量并行度                  | `16`           |
-| `service.port`             | 服务暴露端口                | `40000`        |
+| 参数                         | 描述                                     | 默认值           |
+| ---------------------------- | ---------------------------------------- | ---------------- |
+| `global.name`              | 部署名称                                 | `sglang`       |
+| `global.namespace`         | 命名空间                                 | `default`      |
+| `leaderWorkerSet.replicas` | LeaderWorkerSet 副本数                   | `1`            |
+| `leaderWorkerSet.size`     | 每组大小 (leader + workers)              | `2`            |
+| `image.repository`         | SGLang 镜像仓库                          | `sglang`       |
+| `image.tag`                | 镜像标签                                 | `latest`       |
+| `model.hostPath`           | 主机模型路径                             | `/data/models` |
+| `model.mountPath`          | 容器挂载路径                             | `/work/models` |
+| `resources.leader.gpu`     | Leader GPU 数量                          | `8`            |
+| `resources.worker.gpu`     | Worker GPU 数量                          | `8`            |
+| `sglang.tensorParallelism` | 张量并行度                               | `16`           |
+| `service.port`             | 服务暴露端口                             | `40000`        |
+| `sglang.ncclIBCudaSupport` | NCCL：启用GPU Direct RDMA                | 1                |
+| `sglang.ncclIBDisable`     | NCCL：禁止使用RDMA                       | 0                |
+| `sglang.ncclIbGidIndex`    | NCCL：RDMA使用的GID index，RoCEv2设置为3 | 3                |
+| `sglang.ncclDebug`         | NCCL：显示nccl调试信息                   | INFO             |
 
 ## 访问服务
 
 ```bash
-# 端口转发
+# 通过服务端口访问
+
+
+# 端口转发到本地访问
 kubectl port-forward -n sglang svc/sglang-leader 40000:40000
 
 # 测试访问
@@ -50,5 +61,5 @@ curl http://localhost:40000/v1/chat/completions
 ## 卸载
 
 ```bash
-helm uninstall sglang -n sglang
+helm uninstall sglang-service -n sglang
 ```
