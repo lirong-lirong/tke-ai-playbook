@@ -40,4 +40,11 @@ spec:
           bash {{ .Values.benchName }}-bench.sh
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
+        volumeMounts:
+              - name: tokenizer
+                mountPath: {{ .Values.tokenizer.mountPath }}
       restartPolicy: OnFailure
+      volumes:
+          - name: tokenizer
+            hostPath:
+              path: {{ .Values.tokenizer.hostPath }}

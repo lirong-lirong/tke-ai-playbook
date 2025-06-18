@@ -1,17 +1,17 @@
 # 全局配置
 global:
   name: sglang
-  namespace: default
+  # namespace: default
 
 # LeaderWorkerSet 配置
 leaderWorkerSet:
   replicas: 1
-  size: 2
+  size: 1
   restartPolicy: RecreateGroupOnPodRestart
 
 # 镜像配置
 image:
-  repository: sglang
+  repository: lmsysorg/sglang
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -68,6 +68,8 @@ service:
   port: 40000
   targetPort: 40000
 
-# LeaderWorkerSet CRD 安装控制
-leaderworkerset:
-  enabled: true
+# # LeaderWorkerSet CRD 安装控制
+# leaderworkerset:
+#   enabled: true
+
+crdAlreadyInstalled: true  # 设置为 true 表示 CRD 已存在

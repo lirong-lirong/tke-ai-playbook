@@ -1,13 +1,13 @@
 # 压力测试任务配置
-benchName: "llmbench"
+benchName: "sglang"
 
 # 压力测试使用的镜像
-image: tkeai.tencentcloudcr.com/tke-ai-playbook/llmbench:v0.0.1
+image: fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang-benchmark:v0.2
 
 # SGLang服务配置
 sglangService:
   name: "sglang-leader"  # 固定名称，与LeaderWorkerSet中的Service名称一致
-  namespace: "default"   # 必须与SGLang部署的命名空间相同
+  namespace: "sglang"   # 必须与SGLang部署的命名空间相同
   port: 40000            # 固定端口，与LeaderWorkerSet中的端口一致
 
 # 模型名称（必须与SGLang部署中加载的模型名称一致）
@@ -16,6 +16,10 @@ modelName: "your-model-name"
 # 测试参数
 backend: "sglang"  # 使用sglang后端
 numPrompts: 100    # 测试使用的prompt数量
+
+tokenizer:
+  hostPath: "/path/to/Qwen/Qwen3-32B"
+  mountPath: "/work/models"
 
 # # 资源请求
 # resources:

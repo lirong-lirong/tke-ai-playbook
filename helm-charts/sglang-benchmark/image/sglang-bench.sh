@@ -19,7 +19,7 @@
 echo "Running benchmark for ${BACKEND} with model ${MODEL_NAME} on dataset ${DATASET_NAME} at ${HOST}:${PORT}"
 
 # the benchmark program from https://github.com/sgl-project/sglang/blob/main/python/sglang/bench_serving.py
-python3 -m sglang.bench_serving \
+python3 sglang/python/sglang/bench_serving.py \
     --backend ${BACKEND} \
     --dataset-name ${DATASET_NAME} \
     --dataset-path ${DATASET_PATH} \
@@ -29,5 +29,3 @@ python3 -m sglang.bench_serving \
     --host ${HOST} \
     --port ${PORT} \
     --warmup-requests ${WARMUP}
-
-
