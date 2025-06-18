@@ -23,8 +23,18 @@ spec:
             securityContext:
               privileged: true
             env:
+              - name: NCCL_IB_CUDA_SUPPORT
+                value: "{{ .Values.sglang.ncclIBCudaSupport }}"
+              - name: NCCL_IB_DISABLE
+                value: "{{ .Values.sglang.ncclIBDisable }}"
               - name: NCCL_IB_GID_INDEX
                 value: "{{ .Values.sglang.ncclIbGidIndex }}"
+              - name: NCCL_DEBUG
+                value: "{{ .Values.sglang.ncclDebug }}"
+              - name: GLOO_SOCKET_IFNAME
+                value: "{{ .Values.sglang.glooSocketIfname }}"
+              - name: NCCL_SOCKET_IFNAME
+                value: "{{ .Values.sglang.ncclSocketIfname }}"
             command:
               - python3
               - -m
@@ -106,8 +116,18 @@ spec:
             securityContext:
               privileged: true
             env:
-            - name: NCCL_IB_GID_INDEX
-              value: "{{ .Values.sglang.ncclIbGidIndex }}"
+              - name: NCCL_IB_CUDA_SUPPORT
+                value: "{{ .Values.sglang.ncclIBCudaSupport }}"
+              - name: NCCL_IB_DISABLE
+                value: "{{ .Values.sglang.ncclIBDisable }}"
+              - name: NCCL_IB_GID_INDEX
+                value: "{{ .Values.sglang.ncclIbGidIndex }}"
+              - name: NCCL_DEBUG
+                value: "{{ .Values.sglang.ncclDebug }}"
+              - name: GLOO_SOCKET_IFNAME
+                value: "{{ .Values.sglang.glooSocketIfname }}"
+              - name: NCCL_SOCKET_IFNAME
+                value: "{{ .Values.sglang.ncclSocketIfname }}"
             command:
               - python3
               - -m

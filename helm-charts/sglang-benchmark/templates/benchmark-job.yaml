@@ -30,6 +30,8 @@ spec:
           value: {{ .Values.sglangService.name }}.{{ .Values.sglangService.namespace }}.svc.cluster.local
         - name: PORT
           value: {{ .Values.sglangService.port | quote }}
+        - name: WARMUP
+          value: "{{ .Values.warmup }}"
         command:
         - bash
         - -c

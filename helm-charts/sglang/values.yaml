@@ -47,8 +47,17 @@ sglang:
     
   # 网络配置
   distInitPort: 20000
-  ncclIbGidIndex: 3
 
+  # NCCL/RDMA配置
+  ncclIBCudaSupport: 1
+  ncclIBDisable: 0
+  ncclIbGidIndex: 3
+  ncclSocketIfname: eth0
+  ncclDebug: INFO
+
+  # gloo
+  glooSocketIfname: eth0
+  
 # 网络配置
 network:
   hostNetwork: true

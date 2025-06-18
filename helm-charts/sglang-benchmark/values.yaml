@@ -1,5 +1,6 @@
 # 压力测试任务配置
 benchName: "sglang"
+warmup: 10
 
 # 压力测试使用的镜像
 image: fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang-benchmark:v0.2
