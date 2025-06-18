@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-{{ .Values.benchName }}
+  namespace: {{ .Values.sglangService.namespace }}  # 使用SGLang服务的命名空间
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  template:
+    metadata:
+      name: {{ .Release.Name }}-{{ .Values.benchName }}
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: benchmark
+        image: {{ .Values.image }}
+        env:
+        - name: HF_ENDPOINT
+          value: https://hf-mirror.com
+        - name: BACKEND
+          value: {{ .Values.backend }}
+        - name: ENDPOINT
+          value: ""  # 使用HOST+PORT替代
+        - name: MODEL_NAME
+          value: {{ .Values.modelName }}
+        - name: NUM_PROMPTS
+          value: {{ .Values.numPrompts | quote }}
+        - name: HOST
+          value: {{ .Values.sglangService.name }}.{{ .Values.sglangService.namespace }}.svc.cluster.local
+        - name: PORT
+          value: {{ .Values.sglangService.port | quote }}
+        command:
+        - bash
+        - -c
+        - |
+          set -ex
+          cd /app
+          source ./{{ .Values.benchName }}-venv/bin/activate
+          bash {{ .Values.benchName }}-bench.sh
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+      restartPolicy: OnFailure
