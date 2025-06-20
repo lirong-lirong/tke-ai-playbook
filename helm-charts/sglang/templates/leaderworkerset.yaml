@@ -1,8 +1,9 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: {{ .Values.global.name }}
-  namespace: {{ .Release.Namespace }}
+  name: {{ include "sglang.fullname" . }}
+  labels:
+    {{- include "sglang.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.leaderWorkerSet.replicas }}
   leaderWorkerTemplate:
@@ -16,8 +17,12 @@ spec:
         dnsPolicy: {{ .Values.network.dnsPolicy }}
         hostNetwork: {{ .Values.network.hostNetwork }}
         hostIPC: {{ .Values.network.hostIPC }}
+        {{- with .Values.imagePullSecrets }}
+        imagePullSecrets:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         containers:
-          - name: sglang-leader
+          - name: {{ include "sglang.fullname" . }}-leader
             image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             securityContext:
@@ -31,35 +36,37 @@ spec:
               {{- tpl .Values.leaderResourcesStr . | nindent 14 }}
             ports:
               - containerPort: {{ .Values.sglang.leader.port }}
+            livenessProbe:
+              {{- tpl .Values.livenessProbeStr . | nindent 14}}
             readinessProbe:
-              tcpSocket:
-                port: {{ .Values.sglang.leader.port }}
-              initialDelaySeconds: 30
-              periodSeconds: 10
+              {{- tpl .Values.readinessProbeStr . | nindent 14}}
             volumeMounts:
               {{- tpl .Values.volumeMounts . | nindent 14 }}
         volumes:
-          {{- if .Values.sharedMemory.enabled }}
-          - name: dshm
-            emptyDir:
-              medium: Memory
-              {{- if .Values.sharedMemory.size }}
-              sizeLimit: {{ .Values.sharedMemory.size }}
-              {{- end }}
-          {{- end }}
-          - name: ib
-            hostPath:
-              path: /dev/infiniband
-          - name: model
-            hostPath:
-              path: {{ .Values.model.hostPath }}
+          {{- tpl .Values.volumes . | nindent 10 }}
+                {{- with .Values.nodeSelector }}
+        nodeSelector:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.affinity }}
+        affinity:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.tolerations }}
+        tolerations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
     workerTemplate:
       spec:
         dnsPolicy: {{ .Values.network.dnsPolicy }}
         hostNetwork: {{ .Values.network.hostNetwork }}
         hostIPC: {{ .Values.network.hostIPC }}
+        {{- with .Values.imagePullSecrets }}
+        imagePullSecrets:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         containers:
-          - name: sglang-worker
+          - name: {{ include "sglang.fullname" . }}-worker
             image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
             imagePullPolicy: {{ .Values.image.pullPolicy }}
             securityContext:
@@ -74,17 +81,16 @@ spec:
             volumeMounts:
               {{- tpl .Values.volumeMounts . | nindent 14 }}
         volumes:
-          {{- if .Values.sharedMemory.enabled }}
-          - name: dshm
-            emptyDir:
-              medium: Memory
-              {{- if .Values.sharedMemory.size }}
-              sizeLimit: {{ .Values.sharedMemory.size }}
-              {{- end }}
-          {{- end }}
-          - name: ib
-            hostPath:
-              path: /dev/infiniband
-          - name: model
-            hostPath:
-              path: {{ .Values.model.hostPath }}
+          {{- tpl .Values.volumes . | nindent 10 }}
+                {{- with .Values.nodeSelector }}
+        nodeSelector:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.affinity }}
+        affinity:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.tolerations }}
+        tolerations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}

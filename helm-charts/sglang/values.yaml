@@ -1,8 +1,3 @@
-# 全局配置
-global:
-  name: sglang
-  # namespace: default
-
 # LeaderWorkerSet 配置
 leaderWorkerSet:
   replicas: 1
@@ -109,7 +104,7 @@ volumes: |
   - name: dshm
     emptyDir:
       medium: Memory
-        sizeLimit: {{ .Values.sharedMemory.size }}
+      sizeLimit: {{ .Values.sharedMemory.size }}
   - name: model
     hostPath:
       path: {{ .Values.model.hostPath }}
@@ -136,3 +131,54 @@ leaderResourcesStr: |
     nvidia.com/gpu: "{{ .Values.resources.leader.gpu }}"
     cpu: "{{ .Values.resources.leader.cpu }}"
     memory: "{{ .Values.resources.leader.memory }}"
+
+
+# This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imagePullSecrets: []
+# This is to override the chart name.
+nameOverride: ""
+fullnameOverride: ""
+
+# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+serviceAccount: {}
+  # # Specifies whether a service account should be created
+  # create: false
+  # # Automatically mount a ServiceAccount's API credentials?
+  # automount: false
+  # # Annotations to add to the service account
+  # annotations: {}
+  # # The name of the service account to use.
+  # # If not set and create is true, a name is generated using the fullname template
+  # name: ""
+
+# This is for setting Kubernetes Annotations to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+podAnnotations: {}
+# This is for setting Kubernetes Labels to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext:
+  privileged: true
+
+
+# This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+livenessProbeStr: |
+  httpGet:
+    path: /
+    port: http
+
+readinessProbeStr: |
+  tcpSocket:
+    port: {{ .Values.sglang.leader.port }}
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
