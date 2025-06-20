@@ -2,7 +2,7 @@ apiVersion: v2
 name: sglang-leaderworkerset
 description: Helm chart for deploying SGLang with LeaderWorkerSet
 version: 1.0.0
-appVersion: "latest"
+appVersion: "1.16.0"
 # dependencies:
 #   - name: leaderworkerset
 #     version: ">=1.0.0"

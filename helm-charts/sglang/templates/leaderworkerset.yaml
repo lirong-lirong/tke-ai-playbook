@@ -23,56 +23,12 @@ spec:
             securityContext:
               privileged: true
             env:
-              - name: NCCL_IB_CUDA_SUPPORT
-                value: "{{ .Values.sglang.ncclIBCudaSupport }}"
-              - name: NCCL_IB_DISABLE
-                value: "{{ .Values.sglang.ncclIBDisable }}"
-              - name: NCCL_IB_GID_INDEX
-                value: "{{ .Values.sglang.ncclIbGidIndex }}"
-              - name: NCCL_DEBUG
-                value: "{{ .Values.sglang.ncclDebug }}"
-              - name: GLOO_SOCKET_IFNAME
-                value: "{{ .Values.sglang.glooSocketIfname }}"
-              - name: NCCL_SOCKET_IFNAME
-                value: "{{ .Values.sglang.ncclSocketIfname }}"
-            command:
-              - python3
-              - -m
-              - sglang.launch_server
-              - --model-path
-              - {{ .Values.model.mountPath }}
-              - --mem-fraction-static
-              - "{{ .Values.sglang.memFractionStatic }}"
-              - --torch-compile-max-bs
-              - "{{ .Values.sglang.torchCompileMaxBs }}"
-              - --max-running-requests
-              - "{{ .Values.sglang.maxRunningRequests }}"
-              - --tp
-              - "{{ .Values.sglang.tensorParallelism }}"
-              - --dist-init-addr
-              - $(LWS_LEADER_ADDRESS):{{ .Values.sglang.distInitPort }}
-              - --nnodes
-              - $(LWS_GROUP_SIZE)
-              - --node-rank
-              - $(LWS_WORKER_INDEX)
-              {{- if .Values.sglang.trustRemoteCode }}
-              - --trust-remote-code
-              {{- end }}
-              - --host
-              - "{{ .Values.sglang.leader.host }}"
-              - --port
-              - "{{ .Values.sglang.leader.port }}"
+              {{- tpl .Values.env . | nindent 14 }}
+            command: ["/bin/sh", "-c"]
+            args:
+              - | {{ tpl .Values.commandStr . | nindent 16 }}
             resources:
-              limits:
-                {{- if gt (int .Values.resources.leader.gpu) 0 }}
-                nvidia.com/gpu: "{{ .Values.resources.leader.gpu }}"
-                {{- end }}
-                {{- if gt (int .Values.resources.leader.cpu) 0 }}
-                cpu: "{{ .Values.resources.leader.cpu }}"
-                {{- end }}
-                {{- if gt (int .Values.resources.leader.memory) 0 }}
-                memory: "{{ .Values.resources.leader.memory }}"
-                {{- end }}
+              {{- tpl .Values.leaderResourcesStr . | nindent 14 }}
             ports:
               - containerPort: {{ .Values.sglang.leader.port }}
             readinessProbe:
@@ -81,14 +37,7 @@ spec:
               initialDelaySeconds: 30
               periodSeconds: 10
             volumeMounts:
-              {{- if .Values.sharedMemory.enabled }}
-              - mountPath: /dev/shm
-                name: dshm
-              {{- end }}
-              - name: model
-                mountPath: {{ .Values.model.mountPath }}
-              - name: ib
-                mountPath: /dev/infiniband
+              {{- tpl .Values.volumeMounts . | nindent 14 }}
         volumes:
           {{- if .Values.sharedMemory.enabled }}
           - name: dshm
@@ -98,12 +47,12 @@ spec:
               sizeLimit: {{ .Values.sharedMemory.size }}
               {{- end }}
           {{- end }}
-          - name: model
-            hostPath:
-              path: {{ .Values.model.hostPath }}
           - name: ib
             hostPath:
               path: /dev/infiniband
+          - name: model
+            hostPath:
+              path: {{ .Values.model.hostPath }}
     workerTemplate:
       spec:
         dnsPolicy: {{ .Values.network.dnsPolicy }}
@@ -116,61 +65,14 @@ spec:
             securityContext:
               privileged: true
             env:
-              - name: NCCL_IB_CUDA_SUPPORT
-                value: "{{ .Values.sglang.ncclIBCudaSupport }}"
-              - name: NCCL_IB_DISABLE
-                value: "{{ .Values.sglang.ncclIBDisable }}"
-              - name: NCCL_IB_GID_INDEX
-                value: "{{ .Values.sglang.ncclIbGidIndex }}"
-              - name: NCCL_DEBUG
-                value: "{{ .Values.sglang.ncclDebug }}"
-              - name: GLOO_SOCKET_IFNAME
-                value: "{{ .Values.sglang.glooSocketIfname }}"
-              - name: NCCL_SOCKET_IFNAME
-                value: "{{ .Values.sglang.ncclSocketIfname }}"
-            command:
-              - python3
-              - -m
-              - sglang.launch_server
-              - --model-path
-              - {{ .Values.model.mountPath }}
-              - --mem-fraction-static
-              - "{{ .Values.sglang.memFractionStatic }}"
-              - --torch-compile-max-bs
-              - "{{ .Values.sglang.torchCompileMaxBs }}"
-              - --max-running-requests
-              - "{{ .Values.sglang.maxRunningRequests }}"
-              - --tp
-              - "{{ .Values.sglang.tensorParallelism }}"
-              - --dist-init-addr
-              - $(LWS_LEADER_ADDRESS):{{ .Values.sglang.distInitPort }}
-              - --nnodes
-              - $(LWS_GROUP_SIZE)
-              - --node-rank
-              - $(LWS_WORKER_INDEX)
-              {{- if .Values.sglang.trustRemoteCode }}
-              - --trust-remote-code
-              {{- end }}
+              {{- tpl .Values.env . | nindent 14 }}
+            command: ["/bin/sh", "-c"]
+            args:
+              - | {{ tpl .Values.commandStr . | nindent 16 }}
             resources:
-              limits:
-                {{- if gt (int .Values.resources.worker.gpu) 0 }}
-                nvidia.com/gpu: "{{ .Values.resources.worker.gpu }}"
-                {{- end }}
-                {{- if gt (int .Values.resources.worker.cpu) 0 }}
-                cpu: "{{ .Values.resources.worker.cpu }}"
-                {{- end }}
-                {{- if gt (int .Values.resources.worker.memory) 0 }}
-                memory: "{{ .Values.resources.worker.memory }}"
-                {{- end }}
+              {{- tpl .Values.workerResourcesStr . | nindent 14 }}
             volumeMounts:
-              {{- if .Values.sharedMemory.enabled }}
-              - mountPath: /dev/shm
-                name: dshm
-              {{- end }}
-              - name: model
-                mountPath: {{ .Values.model.mountPath }}
-              - name: ib
-                mountPath: /dev/infiniband
+              {{- tpl .Values.volumeMounts . | nindent 14 }}
         volumes:
           {{- if .Values.sharedMemory.enabled }}
           - name: dshm

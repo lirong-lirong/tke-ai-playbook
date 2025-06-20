@@ -42,7 +42,7 @@ sglang:
   
   # Leader 专用参数
   leader:
-    host: "0.0.0.0"
+    host: 0.0.0.0
     port: 40000
     
   # 网络配置
@@ -77,8 +77,62 @@ service:
   port: 40000
   targetPort: 40000
 
-# # LeaderWorkerSet CRD 安装控制
-# leaderworkerset:
-#   enabled: true
+commandStr: |
+  python3 -m sglang.launch_server \
+    --model-path {{ .Values.model.mountPath }} \
+    --mem-fraction-static "{{ .Values.sglang.memFractionStatic }}" \
+    --torch-compile-max-bs "{{ .Values.sglang.torchCompileMaxBs }}" \
+    --max-running-requests "{{ .Values.sglang.maxRunningRequests }}" \
+    --tp "{{ .Values.sglang.tensorParallelism }}" \
+    --dist-init-addr $(LWS_LEADER_ADDRESS):{{ .Values.sglang.distInitPort }} \
+    --nnodes $(LWS_GROUP_SIZE) \
+    --node-rank $(LWS_WORKER_INDEX) \
+    --trust-remote-code \
+    --port "{{ .Values.sglang.leader.port }}"
 
-crdAlreadyInstalled: true  # 设置为 true 表示 CRD 已存在
+env: |
+  - name: NCCL_IB_CUDA_SUPPORT
+    value: "{{ .Values.sglang.ncclIBCudaSupport }}"
+  - name: NCCL_IB_DISABLE
+    value: "{{ .Values.sglang.ncclIBDisable }}"
+  - name: NCCL_IB_GID_INDEX
+    value: "{{ .Values.sglang.ncclIbGidIndex }}"
+  - name: NCCL_DEBUG
+    value: "{{ .Values.sglang.ncclDebug }}"
+  - name: GLOO_SOCKET_IFNAME
+    value: "{{ .Values.sglang.glooSocketIfname }}"
+  - name: NCCL_SOCKET_IFNAME
+    value: "{{ .Values.sglang.ncclSocketIfname }}"
+
+
+volumes: |
+  - name: dshm
+    emptyDir:
+      medium: Memory
+        sizeLimit: {{ .Values.sharedMemory.size }}
+  - name: model
+    hostPath:
+      path: {{ .Values.model.hostPath }}
+  - name: ib
+    hostPath:
+      path: /dev/infiniband
+
+volumeMounts: | 
+  - name: dshm
+    mountPath: /dev/shm  
+  - name: model
+    mountPath: {{ .Values.model.mountPath }}
+  - name: ib
+    mountPath: /dev/infiniband
+
+workerResourcesStr: |
+  limits:
+    nvidia.com/gpu: "{{ .Values.resources.worker.gpu }}"
+    cpu: "{{ .Values.resources.worker.cpu }}"
+    memory: "{{ .Values.resources.worker.memory }}"
+
+leaderResourcesStr: |
+  limits:
+    nvidia.com/gpu: "{{ .Values.resources.leader.gpu }}"
+    cpu: "{{ .Values.resources.leader.cpu }}"
+    memory: "{{ .Values.resources.leader.memory }}"
