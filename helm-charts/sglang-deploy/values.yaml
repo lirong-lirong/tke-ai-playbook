@@ -25,44 +25,45 @@ resources:
     gpu: 8
     cpu: 0
     memory: 0
+  # 共享内存配置
+  sharedMemory: 64G
 
 # SGLang 服务器配置
-sglang:
+llmConfig:
   # 通用参数
-  memFractionStatic: 0.93
-  torchCompileMaxBs: 8
-  maxRunningRequests: 20
-  tensorParallelism: 16
+  memFractionStatic: 0.7   # 显存预留比例
+  tp: 8
   trustRemoteCode: true
+  dpAttantion: --enable-dp-attention  # 对于高 QPS 场景，请添加--enable-dp-attention参数以提高吞吐量
+  dp: 2
+  # torchCompile: --enable-torch-compile # 开启torch编译优化
+  torchCompileMaxBs: 8      # 最大批量大小
   
   # Leader 专用参数
   leader:
-    host: 0.0.0.0
+    # host: 0.0.0.0
     port: 40000
     
   # 网络配置
   distInitPort: 20000
 
+
+# 环境变量
+env:
   # NCCL/RDMA配置
   ncclIBCudaSupport: 1
   ncclIBDisable: 0
   ncclIbGidIndex: 3
   ncclSocketIfname: eth0
   ncclDebug: INFO
-
   # gloo
   glooSocketIfname: eth0
-  
+
 # 网络配置
 network:
   hostNetwork: true
   hostIPC: true
   dnsPolicy: ClusterFirstWithHostNet
-
-# 共享内存配置
-sharedMemory:
-  enabled: true
-  size: 32G
 
 # 服务配置
 service:
@@ -75,36 +76,40 @@ service:
 commandStr: |
   python3 -m sglang.launch_server \
     --model-path {{ .Values.model.mountPath }} \
-    --mem-fraction-static "{{ .Values.sglang.memFractionStatic }}" \
-    --torch-compile-max-bs "{{ .Values.sglang.torchCompileMaxBs }}" \
-    --max-running-requests "{{ .Values.sglang.maxRunningRequests }}" \
-    --tp "{{ .Values.sglang.tensorParallelism }}" \
-    --dist-init-addr $(LWS_LEADER_ADDRESS):{{ .Values.sglang.distInitPort }} \
+    --mem-fraction-static "{{ .Values.llmConfig.memFractionStatic }}" \
+    --tp "{{ .Values.llmConfig.tp }}" \
+    --dist-init-addr $(LWS_LEADER_ADDRESS):{{ .Values.llmConfig.distInitPort }} \
     --nnodes $(LWS_GROUP_SIZE) \
     --node-rank $(LWS_WORKER_INDEX) \
     --trust-remote-code \
-    --port "{{ .Values.sglang.leader.port }}"
+    --host 0.0.0.0 \
+    --port "{{ .Values.llmConfig.leader.port }}" \
+    {{ .Values.llmConfig.dpAttantion }} \
+    {{ .Values.llmConfig.torchCompile }} \
+    --torch-compile-max-bs "{{ .Values.llmConfig.torchCompileMaxBs }}" \
+    --dp {{ .Values.llmConfig.dp }} 
 
-env: |
+
+envStr: |
   - name: NCCL_IB_CUDA_SUPPORT
-    value: "{{ .Values.sglang.ncclIBCudaSupport }}"
+    value: "{{ .Values.env.ncclIBCudaSupport }}"
   - name: NCCL_IB_DISABLE
-    value: "{{ .Values.sglang.ncclIBDisable }}"
+    value: "{{ .Values.env.ncclIBDisable }}"
   - name: NCCL_IB_GID_INDEX
-    value: "{{ .Values.sglang.ncclIbGidIndex }}"
+    value: "{{ .Values.env.ncclIbGidIndex }}"
   - name: NCCL_DEBUG
-    value: "{{ .Values.sglang.ncclDebug }}"
+    value: "{{ .Values.env.ncclDebug }}"
   - name: GLOO_SOCKET_IFNAME
-    value: "{{ .Values.sglang.glooSocketIfname }}"
+    value: "{{ .Values.env.glooSocketIfname }}"
   - name: NCCL_SOCKET_IFNAME
-    value: "{{ .Values.sglang.ncclSocketIfname }}"
+    value: "{{ .Values.env.ncclSocketIfname }}"
 
 
 volumes: |
   - name: dshm
     emptyDir:
       medium: Memory
-      sizeLimit: {{ .Values.sharedMemory.size }}
+      sizeLimit: {{ .Values.resources.sharedMemory }}
   - name: model
     hostPath:
       path: {{ .Values.model.hostPath }}
@@ -167,14 +172,13 @@ securityContext:
 
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 livenessProbeStr: |
-  httpGet:
-    path: /
-    port: http
+  tcpSocket:
+    port: {{ .Values.llmConfig.leader.port }}
 
 readinessProbeStr: |
   tcpSocket:
-    port: {{ .Values.sglang.leader.port }}
-  initialDelaySeconds: 30
+    port: {{ .Values.llmConfig.leader.port }}
+  initialDelaySeconds: 10
   periodSeconds: 10
 
 nodeSelector: {}

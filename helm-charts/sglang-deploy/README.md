@@ -11,16 +11,17 @@
 
 ```bash
 # 创建命名空间
-kubectl create namespace sglang
+$ kubectl create namespace sglang
 
 # 部署 SGLang 服务
-helm install sglang-service ./sglang-leaderworkerset -n sglang \
+$ helm install sglang-service ./sglang-deploy -n sglang \
 	--set model.hostPath="/path/to/Qwen/Qwen3-32B" \
 	--set leaderWorkerSet.size=2 \
 	--set resources.leader.gpu=8 \
 	--set resources.worker.gpu=8 \
-	--set sglang.tensorParallelism=4 \
-	--set sglang.modelName="Qwen3-32B" \
+	--set llmConfig.tp=4 \
+	--set llmConfig.dp=2 \
+	--set llmConfig.modelName="Qwen3-32B" \
 	--set model.mountPath="/work/models" 
 ```
 
@@ -38,12 +39,12 @@ helm install sglang-service ./sglang-leaderworkerset -n sglang \
 | `model.mountPath`          | 容器挂载路径                             | `/work/models` |
 | `resources.leader.gpu`     | Leader GPU 数量                          | `8`            |
 | `resources.worker.gpu`     | Worker GPU 数量                          | `8`            |
-| `sglang.tensorParallelism` | 张量并行度                               | `16`           |
+| `llmConfig.tp`             | 张量并行度                               | 8                |
+| `llmConfig.dp`             | 数据并行度                               | 2                |
 | `service.port`             | 服务暴露端口                             | `40000`        |
-| `sglang.ncclIBCudaSupport` | NCCL：启用GPU Direct RDMA                | 1                |
-| `sglang.ncclIBDisable`     | NCCL：禁止使用RDMA                       | 0                |
-| `sglang.ncclIbGidIndex`    | NCCL：RDMA使用的GID index，RoCEv2设置为3 | 3                |
-| `sglang.ncclDebug`         | NCCL：显示nccl调试信息                   | INFO             |
+| `env.ncclIBDisable`        | NCCL：禁止使用RDMA                       | 0                |
+| `env.ncclIbGidIndex`       | NCCL：RDMA使用的GID index，RoCEv2设置为3 | 3                |
+| `env.ncclDebug`            | NCCL：显示nccl调试信息                   | INFO             |
 
 ## 访问服务
 
@@ -52,14 +53,18 @@ helm install sglang-service ./sglang-leaderworkerset -n sglang \
 
 
 # 端口转发到本地访问
-kubectl port-forward -n sglang svc/sglang-leader 40000:40000
+$ kubectl get service -n sglang
+NAME                    TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)     AGE
+sglang-service          ClusterIP   None            <none>        <none>      53s
+sglang-service-leader   ClusterIP   cluser_ip   <none>        40000/TCP   53s
+$ kubectl port-forward -n sglang svc/sglang-service-leader 40000:40000
 
 # 测试访问
-curl http://localhost:40000/v1/chat/completions
+$ curl http://localhost:40000/v1/chat/completions
 ```
 
 ## 卸载
 
 ```bash
-helm uninstall sglang-service -n sglang
+$ helm uninstall sglang-service -n sglang
 ```

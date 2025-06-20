@@ -1,12 +1,14 @@
+
 {{- if .Values.service.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.service.name }}
-  namespace: {{ .Values.global.namespace }}
+  name: {{ include "sglang.fullname" . }}-leader
+  labels:
+    {{- include "sglang.labels" . | nindent 4 }}
 spec:
   selector:
-    leaderworkerset.sigs.k8s.io/name: {{ .Values.global.name }}
+    leaderworkerset.sigs.k8s.io/name: {{ include "sglang.fullname" . }}
     role: leader
   ports:
     - protocol: TCP

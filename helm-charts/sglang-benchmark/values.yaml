@@ -7,9 +7,9 @@ image: fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang-benchmark:v0.2
 
 # SGLang服务配置
 sglangService:
-  name: "sglang-leader"  # 固定名称，与LeaderWorkerSet中的Service名称一致
+  name: "sglang-service-leader"  # 与LeaderWorkerSet中的Service名称一致
   namespace: "sglang"   # 必须与SGLang部署的命名空间相同
-  port: 40000            # 固定端口，与LeaderWorkerSet中的端口一致
+  port: 40000            # 与LeaderWorkerSet中的端口一致
 
 # 模型名称（必须与SGLang部署中加载的模型名称一致）
 modelName: "your-model-name"

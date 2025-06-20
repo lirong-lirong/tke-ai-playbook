@@ -28,14 +28,14 @@ spec:
             securityContext:
               privileged: true
             env:
-              {{- tpl .Values.env . | nindent 14 }}
+              {{- tpl .Values.envStr . | nindent 14 }}
             command: ["/bin/sh", "-c"]
             args:
               - | {{ tpl .Values.commandStr . | nindent 16 }}
             resources:
               {{- tpl .Values.leaderResourcesStr . | nindent 14 }}
             ports:
-              - containerPort: {{ .Values.sglang.leader.port }}
+              - containerPort: {{ .Values.llmConfig.leader.port }}
             livenessProbe:
               {{- tpl .Values.livenessProbeStr . | nindent 14}}
             readinessProbe:
@@ -72,7 +72,7 @@ spec:
             securityContext:
               privileged: true
             env:
-              {{- tpl .Values.env . | nindent 14 }}
+              {{- tpl .Values.envStr . | nindent 14 }}
             command: ["/bin/sh", "-c"]
             args:
               - | {{ tpl .Values.commandStr . | nindent 16 }}
