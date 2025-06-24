@@ -21,7 +21,7 @@ config:
   randomOutputLenList: (1000 1000 150) # --random-output-len
 
 tokenizer:
-  hostPath: /path/to/Qwen/Qwen3-32B
+  hostPath: /data/models
   mountPath: /work/models
 
 commandStr: |
