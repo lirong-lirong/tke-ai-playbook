@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pvc-to-node-copy
+  namespace: default
+spec:
+  template:
+    spec:
+      volumes:
+      - name: shared-pvc
+        persistentVolumeClaim:
+          claimName: shared-pvc  # 使用现有的PVC
+      - name: node-destination
+        hostPath:
+          path: /path/to/download  # 替换为目标节点目录
+          type: DirectoryOrCreate  # 目录不存在则创建
+      containers:
+      - name: copy-container
+        image: alpine:3.18
+        command: ["sh", "-c"]
+        args:
+          - |
+            # 检查源目录是否存在
+            if [ ! -d "/pvc-data" ]; then
+              echo "错误: PVC数据目录不存在"
+              exit 1
+            fi
+            
+            # 检查目标目录是否挂载
+            if [ ! -d "/node-dest" ]; then
+              echo "错误: 节点目标目录未挂载"
+              exit 1
+            fi
+            
+            echo "开始从PVC拷贝数据到节点..."
+            echo "源目录内容:"
+            ls -l /pvc-data
+            
+            # 执行拷贝操作（保留文件属性）
+            cp -a /pvc-data/* /node-dest/
+            
+            echo "拷贝完成"
+            echo "目标目录内容:"
+            ls -l /node-dest
+            
+            echo "操作成功完成"
+        volumeMounts:
+        - name: shared-pvc
+          mountPath: /pvc-data  # PVC挂载点
+        - name: node-destination
+          mountPath: /node-dest  # 节点目录挂载点
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/hostname: 10.32.11.90  # 指定目标节点
+  backoffLimit: 0

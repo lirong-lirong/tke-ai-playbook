@@ -1,0 +1,992 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: model-pressure-test-
+  namespace: default
+spec:
+  serviceAccountName: model-test-runner
+  entrypoint: main
+  
+  # volumeClaimTemplates:
+  volumes:
+  - name: shared-pvc
+    persistentVolumeClaim:
+      claimName: shared-pvc  # 使用已存在的PVC
+
+  arguments:
+    parameters:
+    - name: models
+      value: '["/data/Qwen/Qwen3-32B", "/data/deepseek-ai/DeepSeek-R1-0528"]'  # , "/path/to/deepseek-ai/DeepSeek-R1-0528"
+    - name: engines
+      value: '["sglang"]'
+    - name: node_size
+      value: '[2, 4]'  # '[1, 2, 4]'
+    - name: gpu_per_node
+      value: '[8]' # '[2, 4, 8]'
+    - name: tp
+      value: '[2, 4, 8, 16]' # '[4, 8, 16, 32]'
+    - name: chart_path
+      value: "/shared-data/helm-chart"
+    - name: model_timeout
+      value: "900"  # 模型部署超时时间（秒）如果开启torch编译会更耗时
+    - name: test_timeout
+      value: "7200"  # 测试超时时间（秒）
+    - name: max_retries
+      value: "1"  # 最大重试次数
+    - name: ISL
+      value: "(500 1000 3000)"
+    - name: OSL
+      value: "(1000 1000 150)"
+    - name: concurrency
+      value: "1 4 16 32 64 128"  # 没启用
+    
+
+  parallelism: 1
+  templates:
+  - name: main
+    steps:
+    - - name: prepare-pvc
+        template: prepare-pvc
+    - - name: generate-test-matrix
+        template: generate-test-configs
+    - - name: run-all-tests
+        template: test-loop
+        arguments:
+          parameters:
+          - name: test_config
+            value: "{{item}}"
+        withParam: "{{steps.generate-test-matrix.outputs.result}}"
+    - - name: consolidate-reports
+        template: consolidate-reports
+    # - - name: notify
+    #     template: notify
+
+  # 准备PVC内容
+  - name: prepare-pvc
+    container:
+      image: alpine:3.18
+      command: [sh, -c]
+      args:
+        - |
+          # # 创建目录结构
+          mkdir -p /shared-data/helm-chart
+          mkdir -p /shared-data/reports
+          mkdir -p /shared-data/failed-tests
+          
+          # 检查Chart是否存在
+          if [ ! -d "{{workflow.parameters.chart_path}}" ]; then
+            echo "ERROR: Helm chart not found at {{workflow.parameters.chart_path}}"
+            exit 1
+          else
+            echo "Helm chart found at {{workflow.parameters.chart_path}}"
+          fi
+          
+          # 设置权限
+          chmod -R 777 /shared-data
+      volumeMounts:
+      - name: shared-pvc
+        mountPath: /shared-data
+
+  # 生成测试配置矩阵 - 添加更严格的验证
+  - name: generate-test-configs
+    script:
+      image: python:3.9-slim
+      command: [python]
+      source: |
+        import json
+        import itertools
+        import os
+        
+        # 从工作流参数获取配置
+        models = json.loads(os.environ["MODELS"])
+        engines = json.loads(os.environ["ENGINES"])
+        node_size = json.loads(os.environ["NODE_SIZE"])
+        gpu_per_node = json.loads(os.environ["GPU_PER_NODE"])
+        tp_list = json.loads(os.environ["TP"])
+        
+        # 自定义函数：验证配置合法性
+        def is_valid(model, node_size, gpu_per_node, tp):
+            total_gpu = node_size * gpu_per_node
+            # 1. TP必须整除总GPU数
+            if total_gpu % tp != 0:
+                return False, "TP must divide total GPU count"
+                
+            # 2. 特定模型的GPU数量要求
+            if "deepseek" in model.lower() and (total_gpu <= 8 or tp <= 8):
+                return False, "DeepSeek models require at least 8 GPUs"
+                
+            # # 3. TP不能超过单节点GPU数
+            # if tp > gpu_per_node:
+            #     return False, "TP cannot exceed GPUs per node"
+                
+            # # 4. 最大GPU数量限制
+            # if total_gpu > 32:
+            #     return False, "Total GPU count exceeds maximum (32)"
+                
+            return True, ""
+        
+        # 生成所有组合
+        combinations = []
+        for m, e, ns, gpn, tp_val in itertools.product(models, engines, node_size, gpu_per_node, tp_list):
+            valid, reason = is_valid(m, ns, gpn, tp_val)
+            if not valid:
+                # print(f"Skipping invalid config: model={m}, node_size={ns}, gpu_per_node={gpn}, tp={tp_val}. Reason: {reason}")
+                continue
+            
+            combinations.append({
+                "model": m,
+                "engine": e,
+                "node_size": ns,
+                "gpu_per_node": gpn,
+                "tp": tp_val
+            })
+        
+        # print(f"Generated {len(combinations)} valid test configurations")
+        
+        # 构建完整的测试配置
+        test_configs = []
+        for combo in combinations:
+            test_configs.append({
+                "deployment": {
+                    "model": combo["model"],
+                    "engine": combo["engine"],
+                    "node_size": combo["node_size"],
+                    "tp": combo["tp"],
+                    "dp": 1,
+                    "gpu_per_node": combo["gpu_per_node"],
+                    "replicas": 1,
+                    "shared_memory": "128Gi",
+                    "mem_fraction_static": 0.85,
+                    "host_path": combo["model"],
+                    "mount_path": "/work/models"
+                },
+                "test": {
+                    "model": combo["model"][7:],
+                    "tokenizer": combo["model"]
+                }
+            })
+        
+        # 输出JSON数组
+        print(json.dumps(test_configs))
+      env:
+        - name: MODELS
+          value: "{{workflow.parameters.models}}"
+        - name: ENGINES
+          value: "{{workflow.parameters.engines}}"
+        - name: NODE_SIZE
+          value: "{{workflow.parameters.node_size}}"
+        - name: GPU_PER_NODE
+          value: "{{workflow.parameters.gpu_per_node}}"
+        - name: TP
+          value: "{{workflow.parameters.tp}}"
+
+  # 增强的测试循环模板 - 添加失败处理和重试
+  - name: test-loop
+    inputs:
+      parameters:
+      - name: test_config
+    retryStrategy:
+      limit: "{{workflow.parameters.max_retries}}"
+      retryPolicy: "Always"
+    steps:
+
+    - - name: deploy-model
+        template: deploy-model
+        arguments:
+          parameters:
+          - name: config
+            value: "{{inputs.parameters.test_config}}"
+
+    - - name: wait-model-ready
+        template: wait-model-ready
+        arguments:
+          parameters:
+          - name: config
+            value: "{{inputs.parameters.test_config}}"
+          - name: release_name
+            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+          - name: pre_status
+            value: "{{steps.deploy-model.outputs.parameters.status_code}}"
+        # when: "{{steps.deploy-model.outputs.parameters.status_code}} == true"
+
+    - - name: run-test
+        template: run-pressure-test
+        arguments:
+          parameters:
+          - name: config
+            value: "{{inputs.parameters.test_config}}"
+          - name: release_name
+            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+          - name: pre_status
+            value: "{{steps.deploy-model.outputs.parameters.status_code}}"
+          - name: ISL
+            value: "{{workflow.parameters.ISL}}"
+          - name: OSL
+            value: "{{workflow.parameters.OSL}}"
+          - name: concurrency
+            value: "{{workflow.parameters.concurrency}}"
+        # when: "{{steps.wait-model-ready.outputs.parameters.status_code}} == true"
+        
+    - - name: monitor-test-job
+        template: monitor-test-job
+        arguments:
+          parameters:
+          - name: release_name
+            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+          - name: pre_status
+            value: "{{steps.run-test.outputs.parameters.status_code}}"
+        # when: "{{steps.run-test.outputs.parameters.status_code}} == true"
+
+    - - name: cleanup
+        template: cleanup-deployment
+        arguments:
+          parameters:
+          - name: release_name
+            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+
+    - - name: handle-deploy-failure
+        template: handle-failure
+        arguments:
+          parameters:
+          - name: config
+            value: "{{inputs.parameters.test_config}}"
+          - name: release_name
+            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+          - name: error_reason
+            value: "Deployment failed"
+        when: "{{steps.deploy-model.outputs.parameters.status_code}} == false || 
+                {{steps.wait-model-ready.status}} == false || 
+                {{steps.monitor-test-job.status}} == false "
+          
+
+
+  # 模型部署模板 - 添加重试和超时处理
+  - name: deploy-model
+    inputs:
+      parameters:
+      - name: config
+    outputs:
+      parameters:
+      - name: release_name
+        valueFrom:
+          path: /tmp/release_name
+      - name: status_code
+        valueFrom:
+          path: /tmp/status_code
+    retryStrategy:
+      limit: "{{workflow.parameters.max_retries}}"
+      retryPolicy: "OnFailure"
+    container:
+      image: alpine/k8s:1.30.14
+      command: [sh, -c]
+      args:
+        - |
+          # 安装 jq (Alpine Linux)
+          # apk add --no-cache jq
+
+          # 解析配置参数
+          CONFIG='{{inputs.parameters.config}}'
+          MODEL=$(echo "$CONFIG" | jq -r '.deployment.model')
+          ENGINE=$(echo "$CONFIG" | jq -r '.deployment.engine')
+          NODE_SIZE=$(echo "$CONFIG" | jq -r '.deployment.node_size')
+          TP=$(echo "$CONFIG" | jq -r '.deployment.tp')
+          GPU=$(echo "$CONFIG" | jq -r '.deployment.gpu_per_node')
+          
+          # 生成唯一测试ID
+          ARGO_POD_NAME="{{pod.name}}"
+          TEST_ID="$ENGINE-${ARGO_POD_NAME: -20}"  # 截取后20个字符
+          echo $TEST_ID > /tmp/release_name
+          
+          # 记录开始时间
+          START_TIME=$(date +%s)
+          
+          # Helm部署命令
+          echo "Starting deployment for model: $MODEL with $NODE_SIZE nodes, $GPU GPUs per node, TP=$TP"
+          
+          set +e
+          helm install $TEST_ID "{{workflow.parameters.chart_path}}"/$ENGINE-deploy  \
+            --set nodeSize=$NODE_SIZE \
+            --set resources.gpu=$GPU \
+            --set llmConfig.tp=$TP \
+            --set llmConfig.dp=1 \
+            --set model.hostPath=$MODEL \
+            --set leaderWorkerSet.restartPolicy=RecreateGroupOnPodRestart \
+            --set restartPolicy=Always \
+            --timeout {{workflow.parameters.model_timeout}}s \
+            --atomic
+          
+          DEPLOY_EXIT_CODE=$?
+          set +e
+          
+          # 记录部署结果
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          
+          if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
+            echo "Deployment failed for model: $MODEL after $DURATION seconds"
+            # 记录失败信息
+            FAIL_DIR="/shared-data/failed-tests/{{workflow.name}}"
+            mkdir -p $FAIL_DIR
+            echo "$CONFIG" > $FAIL_DIR/$TEST_ID-failed.json
+            echo "Deployment failed after $DURATION seconds" >> $FAIL_DIR/$TEST_ID-failed.json
+            echo "----------------------------"
+            echo "false" > /tmp/status_code
+          else
+            echo "Successfully deployed model: $MODEL in $DURATION seconds"
+            echo "----------------------------"
+            echo "success" > /tmp/status_code
+          fi
+      volumeMounts:
+      - name: shared-pvc
+        mountPath: /shared-data
+
+  # 等待模型就绪 - 添加更严格的健康检查
+  - name: wait-model-ready
+    inputs:
+      parameters:
+      - name: config
+      - name: release_name
+      - name: pre_status
+    outputs:
+      parameters:
+      - name: status_code
+        valueFrom: 
+          path: /tmp/status_code
+    retryStrategy:
+      limit: "{{workflow.parameters.max_retries}}"
+      retryPolicy: "OnFailure"
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args:
+        - |
+          echo "false" > /tmp/status_code
+          pre_status="{{inputs.parameters.pre_status}}"
+          if [ "$pre_status" = "false" ]; then
+            echo "Skipping"
+            exit 0
+          fi
+          # 获取Helm release名称
+          release_name="{{inputs.parameters.release_name}}"
+          
+          # 解析模型类型
+          CONFIG='{{inputs.parameters.config}}'
+          MODEL=$(echo "$CONFIG" | jq -r '.deployment.model')
+          
+          # # 确定资源类型
+          RESOURCE_TYPE="statefulset"
+          
+          # 等待资源完全就绪
+          echo "Waiting for $RESOURCE_TYPE/$release_name to be ready..."
+          
+          # 设置超时
+          TIMEOUT={{workflow.parameters.model_timeout}}
+          START_TIME=$(date +%s)
+          
+          # 等待部署完成
+          kubectl rollout status $RESOURCE_TYPE/$release_name --timeout=${TIMEOUT}s
+          
+          # 检查readinessProbe
+          SERVICE_NAME=$(kubectl get svc -l app.kubernetes.io/instance=$release_name -o jsonpath='{.items[0].metadata.name}')
+          if [ -z "$SERVICE_NAME" ]; then
+            echo "ERROR: Service not found for release $release_name"
+            echo "false" > /tmp/status_code
+          fi
+          
+
+  # 压力测试模板 - 添加超时和等待
+  - name: run-pressure-test
+    inputs:
+      parameters:
+      - name: config
+      - name: release_name
+      - name: pre_status
+      - name: ISL
+      - name: OSL
+      - name: concurrency
+    outputs:
+      parameters:
+      - name: status_code
+        valueFrom:
+          path: /tmp/status_code
+    container:
+      image: alpine/k8s:1.30.14
+      command: [sh, -c]
+      args:
+        - |
+          set +e
+          echo "false" > /tmp/status_code
+          pre_status="{{inputs.parameters.pre_status}}"
+          if [ "$pre_status" = "false" ]; then
+            echo "Skipping"
+            exit 0
+          fi
+          # 解析测试参数
+          CONFIG='{{inputs.parameters.config}}'
+          MODEL_PATH=$(echo "$CONFIG" | jq -r '.deployment.model')
+          MODEL_NAME=$(basename "$MODEL_PATH")  
+          ENGINE=$(echo "$CONFIG" | jq -r '.deployment.engine')
+          TOKENIZER=$(echo "$CONFIG" | jq -r '.test.tokenizer')
+          GPU=$(echo "$CONFIG" | jq -r '.deployment.gpu_per_node')
+          NODE_SIZE=$(echo "$CONFIG" | jq -r '.deployment.node_size')
+          TP=$(echo "$CONFIG" | jq -r '.deployment.tp')
+          ISL="{{inputs.parameters.ISL}}"
+          OSL="{{inputs.parameters.OSL}}"
+          concurrency="{{inputs.parameters.concurrency}}"
+
+          # 获取模型服务名称
+          release_name="{{inputs.parameters.release_name}}"
+          SERVICE_NAME=$(kubectl get svc -l app.kubernetes.io/instance=$release_name -o jsonpath='{.items[0].metadata.name}')
+          
+          # 报告路径
+          REPORT_DIR="/shared-data/reports/{{workflow.name}}/${MODEL_NAME}_${ENGINE}_ns${NODE_SIZE}_gpu${GPU}_tp${TP}"
+          mkdir -p $REPORT_DIR
+          
+          # 运行压力测试
+          echo "Starting pressure test for $MODEL_NAME-$ENGINE"
+          set -x
+          helm install $release_name-test /shared-data/helm-chart/vllm-benchmark \
+            --set config.model=$MODEL_NAME \
+            --set config.outputPath=$REPORT_DIR \
+            --set tokenizer.hostPath=$TOKENIZER \
+            --set serviceInfo.name=$SERVICE_NAME \
+            --set serviceInfo.attempts=10 \
+            --set config.ISL="$ISL" \
+            --set config.OSL="$OSL" \
+            --timeout {{workflow.parameters.test_timeout}}s \
+            --wait
+          
+          HELM_EXIT_CODE=$?
+          # 记录部署结果
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          
+          if [ $HELM_EXIT_CODE -ne 0 ]; then
+            echo "Pressure test failed for model: $MODEL_NAME"
+            # 记录失败信息
+            FAIL_DIR="/shared-data/failed-tests/{{workflow.name}}"
+            mkdir -p $FAIL_DIR
+            echo "$CONFIG" >> $FAIL_DIR/$TEST_ID-failed.json
+            echo "Pressure test failed" >> $FAIL_DIR/$TEST_ID-failed.json
+            echo "false" > /tmp/status_code
+          else
+            echo "Successfully deployed model: $MODEL in $DURATION seconds"
+            echo "success" > /tmp/status_code
+          fi
+          echo "----------------------------------------"
+      volumeMounts:
+      - name: shared-pvc
+        mountPath: /shared-data
+
+  # 监控测试Job状态
+  - name: monitor-test-job
+    inputs:
+      parameters:
+      - name: release_name
+      - name: pre_status
+    outputs:
+      parameters:
+      - name: status_code 
+        valueFrom:
+          path: /tmp/status_code 
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args:
+        - |
+          echo "success" > /tmp/status_code
+          pre_status="{{inputs.parameters.pre_status}}"
+          if [ "$pre_status" = "false" ]; then
+            echo "Skipping"
+            exit 0
+          fi
+          release_name="{{inputs.parameters.release_name}}"
+          JOB_NAME="${release_name}-test"
+          echo "Monitoring test job: $JOB_NAME"
+          
+          TIMEOUT={{workflow.parameters.test_timeout}}
+          end_time=$(( $(date +%s) + TIMEOUT ))
+          job_completed=false
+
+          while [ $(date +%s) -lt $end_time ] && [ "$job_completed" = "false" ]; do
+            # 获取Job状态
+            status=$(kubectl get job $JOB_NAME -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null)
+            
+            # 检查是否完成（包含成功或失败）
+            if echo "$status" | grep -q "True"; then
+              # 确定是成功还是失败
+              if kubectl get job $JOB_NAME -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null | grep -q "True"; then
+                echo "Test job completed successfully"
+                echo "success" > /tmp/status_code
+                job_completed="success"
+              else
+                echo "Test job failed"
+                echo "false" > /tmp/status_code
+                job_completed="failed"
+              fi
+            fi
+            
+            # 等待5秒再次检查
+            [ "$job_completed" = "false" ] && sleep 5
+          done
+          
+          # 处理超时情况
+          if [ "$job_completed" = "false" ]; then
+            echo "ERROR: Test job did not complete within timeout (${TIMEOUT}s)"
+            echo "Current job status:"
+            kubectl describe job $JOB_NAME
+            echo "false" > /tmp/status_code
+            exit 1
+          fi
+          
+          exit 0
+
+
+  # 清理模板
+  - name: cleanup-deployment
+    inputs:
+      parameters:
+      - name: release_name
+    container:
+      image: alpine/k8s:1.30.14
+      command: [sh, -c]
+      args:
+        - |
+          release_name="{{inputs.parameters.release_name}}"
+          
+          # 清理模型部署
+          echo "Cleaning up model deployment: $release_name"
+          helm uninstall $release_name || true
+          
+          # 清理测试任务
+          echo "Cleaning up test job: ${release_name}-test"
+          helm uninstall ${release_name}-test || true
+          
+          # 确保所有相关Pod被终止
+          echo "Deleting any remaining pods"
+          kubectl delete pods -l app.kubernetes.io/instance=$release_name --force --grace-period=0 || true
+          kubectl delete pods -l app.kubernetes.io/instance=${release_name}-test --force --grace-period=0 || true
+          
+          # 删除PVC（如果有）
+          # echo "Deleting PVCs"
+          # kubectl delete pvc -l app.kubernetes.io/instance=$release_name || true
+          
+          echo "Successfully cleaned up all resources for $release_name"
+
+  # 处理失败情况
+  - name: handle-failure
+    inputs:
+      parameters:
+      - name: config
+      - name: release_name
+      - name: error_reason
+    container:
+      image: alpine/k8s:1.30.14
+      command: [sh, -c]
+      args:
+        - |
+          # 解析配置
+          CONFIG='{{inputs.parameters.config}}'
+          MODEL_PATH=$(echo "$CONFIG" | jq -r '.deployment.model')
+          ENGINE=$(echo "$CONFIG" | jq -r '.deployment.engine')
+          MODEL_NAME=$(basename "$MODEL_PATH")  
+
+          # 记录失败信息
+          FAIL_DIR="/shared-data/failed-tests/{{workflow.name}}"
+          mkdir -p $FAIL_DIR
+          
+          # 创建失败报告
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          FAIL_FILE="$FAIL_DIR/${MODEL_NAME}_${ENGINE}_${TIMESTAMP}.json"
+          
+          echo "Recording failed test: $MODEL_NAME-$ENGINE"
+          echo "$CONFIG" > $FAIL_FILE
+          echo "{\"error\": \"{{inputs.parameters.error_reason}}\"}" >> $FAIL_FILE
+          
+          # 尝试清理资源
+          release_name="{{inputs.parameters.release_name}}"
+          if [ -n "$release_name" ]; then
+            echo "Attempting to clean up failed deployment: $release_name"
+            helm uninstall $release_name || true
+            kubectl delete pods -l app.kubernetes.io/instance=$release_name --force --grace-period=0 || true
+          fi
+          
+          echo "Marked test as failed and cleaned up resources"
+      volumeMounts:
+      - name: shared-pvc
+        mountPath: /shared-data
+
+  - name: consolidate-reports
+    container:
+      image: python:3.9-slim
+      command: [sh, -c]
+      args:
+        - |
+          # 安装依赖
+          pip install -i https://mirrors.cloud.tencent.com/pypi/simple pandas matplotlib seaborn requests jq > /dev/null
+          
+          # 设置路径
+          REPORT_DIR="/shared-data/reports/{{workflow.name}}"
+          SUMMARY_DIR="/shared-data/reports/{{workflow.name}}/summary"
+          mkdir -p $SUMMARY_DIR
+          
+          # 生成Python处理脚本
+          cat > process_reports.py << 'EOF'
+          import os
+          import json
+          import re
+          import requests
+          from datetime import datetime
+          from dateutil.parser import parse
+          import math
+
+          def parse_config_from_dirname(dirname):
+              """从目录名解析模型配置信息"""
+              pattern = r'^(.*?)_([^_]+)_ns(\d+)_gpu(\d+)_tp(\d+)'
+              match = re.match(pattern, dirname)
+              
+              if not match:
+                  return None
+              
+              return {
+                  'model': match.group(1),
+                  'engine': match.group(2),
+                  'node_size': int(match.group(3)),
+                  'gpu_per_node': int(match.group(4)),
+                  'tp': int(match.group(5))
+              }
+
+          def parse_params_from_filename(filename):
+              """从文件名解析测试参数"""
+              pattern = r'bench_(\d+)_(\d+)_c(\d*)'
+              match = re.match(pattern, os.path.splitext(filename)[0])
+              
+              if not match:
+                  return None
+              
+              return {
+                  'ISL': int(match.group(1)),
+                  'OSL': int(match.group(2)),
+                  'concurrency': int(match.group(3)) if match.group(3) else 1
+              }
+
+          def process_workflow(workflow_dir):
+              """处理单个工作流目录"""
+              workflow_name = os.path.basename(workflow_dir)
+              all_results = []
+              
+              # 遍历配置目录
+              for config_dir in os.listdir(workflow_dir):
+                  config_path = os.path.join(workflow_dir, config_dir)
+                  if not os.path.isdir(config_path):
+                      continue
+                      
+                  # 解析配置信息
+                  config = parse_config_from_dirname(config_dir)
+                  if not config:
+                      print(f"警告: 无法解析目录名 {config_dir}")
+                      continue
+                  
+                  # 遍历benchmark文件
+                  for file in os.listdir(config_path):
+                      if not file.startswith('bench_') or not file.endswith('.json'):
+                          continue
+                          
+                      file_path = os.path.join(config_path, file)
+                      
+                      # 解析文件名参数
+                      params = parse_params_from_filename(file)
+                      if not params:
+                          print(f"警告: 无法解析文件名 {file}")
+                          continue
+                          
+                      # 读取JSON数据
+                      try:
+                          with open(file_path, 'r') as f:
+                              data = json.load(f)
+                      except Exception as e:
+                          print(f"错误: 无法读取文件 {file_path} - {e}")
+                          continue
+                      
+                      # 创建新的结构化结果对象
+                      result = {
+                          # 部署配置
+                          "deployment_config": {
+                              "model": config.get('model', ''),
+                              "engine": config.get('engine', ''),
+                              "node_size": config.get('node_size', 0),
+                              "gpu_per_node": config.get('gpu_per_node', 0),
+                              "tp": config.get('tp', 0)
+                          },
+                          
+                          # 测试配置
+                          "test_config": {
+                              "ISL": params.get('ISL', 0),
+                              "OSL": params.get('OSL', 0),
+                              "concurrency": params.get('concurrency', 0)
+                          },
+                          
+                          # 性能指标
+                          "metrics": {
+                              "request_throughput": data.get('request_throughput', 0),
+                              "output_throughput": data.get('output_throughput', 0),
+                              "total_token_throughput": data.get('total_token_throughput', 0),
+                              "mean_ttft_ms": data.get('mean_ttft_ms', 0),
+                              "p99_ttft_ms": data.get('p99_ttft_ms', 0),
+                              "mean_tpot_ms": data.get('mean_tpot_ms', 0),
+                              "p99_tpot_ms": data.get('p99_tpot_ms', 0),
+                              "mean_e2el_ms": data.get('mean_e2el_ms', 0),
+                              "p99_e2el_ms": data.get('p99_e2el_ms', 0),
+                              "completed": data.get('completed', 0),
+                              "total_input_tokens": data.get('total_input_tokens', 0),
+                              "total_output_tokens": data.get('total_output_tokens', 0)
+                          },
+                          
+                          # 元数据
+                          "metadata": {
+                              "workflow": workflow_name,
+                              "date": data.get('date', ''),
+                              "file_path": file_path,
+                              "timestamp": data.get('timestamp', datetime.utcnow().isoformat())
+                          }
+                      }
+                      
+                      # 计算额外指标
+                      result["metrics"]["gpu_utilization"] = calculate_gpu_utilization(result)
+                      result["metrics"]["cost_per_token"] = calculate_cost_per_token(result)
+                      
+                      all_results.append(result)
+              
+              return all_results
+
+          def calculate_gpu_utilization(result):
+              """计算GPU利用率指标"""
+              dep = result["deployment_config"]
+              metrics = result["metrics"]
+              
+              # 简化计算：吞吐量 / (GPU总数 * 1000) 作为利用率指标
+              total_gpus = dep["node_size"] * dep["gpu_per_node"]
+              return metrics["total_token_throughput"] / (total_gpus * 1000) if total_gpus > 0 else 0
+
+          def calculate_cost_per_token(result):
+              """计算每个token的近似成本"""
+              dep = result["deployment_config"]
+              metrics = result["metrics"]
+              
+              # 简化计算：节点数量 * 每小时成本 / 吞吐量
+              # 假设每个节点每小时成本为 $10
+              hourly_cost_per_node = 10
+              tokens_per_hour = metrics["total_token_throughput"] * 3600
+              
+              if tokens_per_hour > 0:
+                  return (dep["node_size"] * hourly_cost_per_node) / tokens_per_hour
+              return 0
+
+          def send_to_influxdb(results):
+              """将结果发送到InfluxDB"""
+              # 从环境变量获取数据库配置
+              influx_url = os.getenv('INFLUXDB_URL')
+              influx_token = os.getenv('INFLUXDB_TOKEN')
+              influx_org = os.getenv('INFLUXDB_ORG')
+              influx_bucket = os.getenv('INFLUXDB_BUCKET')
+              
+              if not all([influx_url, influx_token, influx_org, influx_bucket]):
+                  print("警告: InfluxDB环境变量未配置完整，跳过发送")
+                  return False
+              
+              # 构造API端点
+              write_url = f"{influx_url.rstrip('/')}/api/v2/write?org={influx_org}&bucket={influx_bucket}&precision=ns"
+              
+              # 准备行协议数据
+              payload_lines = []
+              
+              for result in results:
+                  # 提取各部分数据
+                  dep = result["deployment_config"]
+                  test = result["test_config"]
+                  metrics = result["metrics"]
+                  meta = result["metadata"]
+                  
+                  # 构造标签（维度）
+                  tags = [
+                      f"model={escape_influx_value(dep['model'])}",
+                      f"engine={escape_influx_value(dep['engine'])}",
+                      f"node_size={dep['node_size']}",
+                      f"gpu_per_node={dep['gpu_per_node']}",
+                      f"tp={dep['tp']}",
+                      f"ISL={test['ISL']}",
+                      f"OSL={test['OSL']}",
+                      f"concurrency={test['concurrency']}",
+                      f"workflow={escape_influx_value(meta['workflow'])}"
+                  ]
+                  
+                  # 构造字段（指标）
+                  fields = [
+                      f"request_throughput={format_float(metrics['request_throughput'])}",
+                      f"output_throughput={format_float(metrics['output_throughput'])}",
+                      f"total_token_throughput={format_float(metrics['total_token_throughput'])}",
+                      f"mean_ttft_ms={format_float(metrics['mean_ttft_ms'])}",
+                      f"p99_ttft_ms={format_float(metrics['p99_ttft_ms'])}",
+                      f"mean_tpot_ms={format_float(metrics['mean_tpot_ms'])}",
+                      f"p99_tpot_ms={format_float(metrics['p99_tpot_ms'])}",
+                      f"mean_e2el_ms={format_float(metrics['mean_e2el_ms'])}",
+                      f"p99_e2el_ms={format_float(metrics['p99_e2el_ms'])}",
+                      f"completed={metrics['completed']}i",
+                      f"total_input_tokens={metrics['total_input_tokens']}i",
+                      f"total_output_tokens={metrics['total_output_tokens']}i",
+                      f"gpu_utilization={format_float(metrics['gpu_utilization'])}",
+                      f"cost_per_token={format_float(metrics['cost_per_token'])}"
+                  ]
+                  
+                  # 转换时间戳
+                  try:
+                      ts = parse(meta['timestamp'])
+                      timestamp = int(ts.timestamp() * 1e9)  # 转换为纳秒
+                  except:
+                      timestamp = int(datetime.utcnow().timestamp() * 1e9)
+                  
+                  # 构建行协议
+                  tags_str = ",".join(tags)
+                  fields_str = ",".join(fields)
+                  payload_lines.append(f"benchmark,{tags_str} {fields_str} {timestamp}")
+              
+              # 发送数据
+              headers = {
+                  'Authorization': f'Token {influx_token}',
+                  'Content-Type': 'text/plain'
+              }
+              payload = "\n".join(payload_lines)
+              
+              try:
+                  response = requests.post(write_url, headers=headers, data=payload)
+                  if response.status_code == 204:
+                      print(f"成功发送 {len(results)} 条数据到InfluxDB")
+                      return True
+                  else:
+                      print(f"发送到InfluxDB失败: {response.status_code} - {response.text}")
+                      print("示例数据行:", payload_lines[0] if payload_lines else "无数据")
+                      return False
+              except Exception as e:
+                  print(f"发送到InfluxDB时出错: {str(e)}")
+                  return False
+
+          def escape_influx_value(value):
+              """转义InfluxDB标签值中的特殊字符"""
+              return str(value).replace(",", "\\,").replace(" ", "\\ ").replace("=", "\\=")
+
+          def format_float(value):
+              """格式化浮点数，处理NaN和Inf"""
+              if math.isnan(value) or math.isinf(value):
+                  return "0.0"
+              return f"{value:.6f}"
+
+          def save_summary_json(results, output_dir):
+              """保存汇总数据为JSON文件"""
+              if not results:
+                  return None
+              
+              workflow_name = results[0]['metadata']['workflow'] if results else "unknown"
+              os.makedirs(output_dir, exist_ok=True)
+              output_file = os.path.join(output_dir, f"{workflow_name}_summary.json")
+              
+              with open(output_file, 'w') as f:
+                  json.dump(results, f, indent=4)
+              
+              print(f"汇总数据已保存至: {output_file}")
+              return output_file
+
+          def main():
+              # 从环境变量获取工作流目录
+              workflow_dir = os.getenv('WORKFLOW_DIR')
+              if not workflow_dir or not os.path.isdir(workflow_dir):
+                  print(f"错误: 无效的工作流目录: {workflow_dir}")
+                  return
+              
+              # 从环境变量获取输出目录
+              output_dir = os.getenv('OUTPUT_DIR', '/var/argo/outputs')
+              
+              print(f"处理工作流: {os.path.basename(workflow_dir)}")
+              
+              # 处理工作流
+              results = process_workflow(workflow_dir)
+              
+              if not results:
+                  print("未找到有效结果")
+                  return
+                  
+              # 保存JSON摘要
+              json_file = save_summary_json(results, output_dir)
+              
+              # 发送数据到InfluxDB
+              if os.getenv('SEND_TO_INFLUXDB', 'true').lower() == 'true':
+                  send_to_influxdb(results)
+
+          if __name__ == "__main__":
+              main()
+          EOF
+          
+          # 设置环境变量并运行Python脚本
+
+          export INFLUXDB_URL=http://influxdb-influxdb2.monitoring.svc.cluster.local:8086
+          export INFLUXDB_TOKEN=my-super-secret-auth-token
+          export INFLUXDB_ORG=my-org
+          export INFLUXDB_BUCKET=benchmarks
+          export SEND_TO_DB=true
+          # export VIZ_BASE_URL=
+          export WORKFLOW_DIR="$REPORT_DIR"
+          export OUTPUT_DIR="$SUMMARY_DIR"
+          
+          python process_reports.py
+
+      volumeMounts:
+      - name: shared-pvc
+        mountPath: /shared-data
+
+  # # 通知模板 - 添加失败信息
+  # - name: notify
+  #   container:
+  #     image: appropriate/curl:latest
+  #     command: [sh, -c]
+  #     args:
+  #       - |
+  #         # 读取汇总报告
+  #         SUMMARY_FILE="/shared-data/reports/{{workflow.name}}/summary/summary.json"
+  #         TOTAL_TESTS=$(jq -r '.total_tests' $SUMMARY_FILE)
+  #         SUCCESS_RATE=$(jq -r '.success_rate' $SUMMARY_FILE)
+  #         FAILED_COUNT=$(jq -r '.failed_tests | length' $SUMMARY_FILE)
+          
+  #         # 发送通知
+  #         curl -X POST https://hooks.slack.com/services/... \
+  #           -H 'Content-type: application/json' \
+  #           -d '{
+  #             "text": "压力测试完成: {{workflow.name}}",
+  #             "attachments": [
+  #               {
+  #                 "title": "测试概览",
+  #                 "fields": [
+  #                   {
+  #                     "title": "总测试数",
+  #                     "value": "'$TOTAL_TESTS'",
+  #                     "short": true
+  #                   },
+  #                   {
+  #                     "title": "成功率",
+  #                     "value": "'$SUCCESS_RATE'%",
+  #                     "short": true
+  #                   },
+  #                   {
+  #                     "title": "失败数",
+  #                     "value": "'$FAILED_COUNT'",
+  #                     "short": true
+  #                   }
+  #                 ]
+  #               },
+  #               {
+  #                 "title": "查看报告",
+  #                 "title_link": "https://report.example.com/{{workflow.name}}"
+  #               }
+  #             ]
+  #           }'
+  #     volumeMounts:
+  #     - name: shared-pvc
+  #       mountPath: /shared-data
