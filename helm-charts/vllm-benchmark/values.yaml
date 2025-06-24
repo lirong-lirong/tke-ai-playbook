@@ -1,0 +1,98 @@
+image: ccr.ccs.tencentyun.com/tke-ai-playbook/llmbench:nightly
+restartPolicy: Never
+# llm服务信息
+serviceInfo:
+  name: llm-service-endpoint  # 固定名称，与LeaderWorkerSet中的Service名称一致
+  namespace: default   # 必须与SGLang部署的命名空间相同
+  port: 40000            # 固定端口，与LeaderWorkerSet中的端口一致
+  attempts: 1000        # 超时，10s * attempts
+
+config:
+  model: your-model-name # --model Name or path of the model. If not set, the default model will request /v1/models for conf. 
+  serviceBackend: openai-chat  # 使用 openai 接口
+  numPrompts: 40    # 测试使用的prompt数量
+  warmup: 10  
+  concurrency: 64 # --max-concurrency
+  outputPath: /share/     # --output-file Output JSONL file name.
+  dataSet: random # --dataset-path
+  sharegptOutputLen:     # --sharegpt-output-len
+  sharegptContextLen: # --sharegpt-context-len The context length of the model for the ShareGPT dataset. Requests longer than the context length will be dropped. 
+  randomInputLenList: (500 1000 3000) # --random-input-len
+  randomOutputLenList: (1000 1000 150) # --random-output-len
+
+tokenizer:
+  hostPath: /path/to/Qwen/Qwen3-32B
+  mountPath: /work/models
+
+commandStr: |
+  export HOST={{ .Values.serviceInfo.name }}
+  export PORT={{ .Values.serviceInfo.port }}
+  export BACHEND={{ .Values.config.serviceBackend }}
+  export DATASET={{ .Values.config.dataSet }}
+  export PROMPTS={{ .Values.config.numPrompts }}
+  mkdir -p {{ .Values.config.outputPath }}
+  max_attempts={{ .Values.serviceInfo.attempts }} 
+  attempt=0
+  until curl -sf http://${HOST}:40000/health; do
+    attempt=$((attempt+1))
+    if [ $attempt -ge $max_attempts ]; then
+        echo "Health check timed out after $max_attempts attempts"
+        exit 1
+    fi
+    sleep 10
+  done
+  sleep 10;
+  export MODEL={{ .Values.config.model }}
+  export TOKENIZER=/work/models
+  declare -a isl_list={{ .Values.config.randomInputLenList }}
+  declare -a osl_list={{ .Values.config.randomOutputLenList }}
+  for i in "${!isl_list[@]}"; do
+      # for j in "${!osl_list[@]}"; do
+        ISL=${isl_list[$i]}
+        OSL=${osl_list[$i]}
+        echo "======================================================"
+        echo "   Running benchmark with 'ISL:OSL=${ISL}:${OSL}'     "
+        echo "   OpenAI Server 'http://${HOST}:${PORT}'             "
+        echo "   Model '${MODEL}'                                   "
+        echo "   Tokenizer '${TOKENIZER}'                           "
+        echo "======================================================"
+        OUTPUT_RESULT_FILE={{ .Values.config.outputPath }}/bench_${ISL}_${OSL}_c${concurrency}.json
+        echo "[tke-llmbench] the result will save to '${OUTPUT_RESULT_FILE}'"
+        for loop in {1..${BENCH_LOOP}}; do
+          for concurrency in 1 4 8 16 32 64 128; do
+              set -x
+              uv run python3 vllm-benchmarks/benchmark_serving.py \
+                  --backend ${BACHEND} \
+                  --model ${TOKENIZER} \
+                  --served-model-name ${MODEL} \
+                  --host ${HOST} --port ${PORT} \
+                  --endpoint /v1/chat/completions \
+                  --dataset-name ${DATASET} \
+                  --random_input_len ${ISL} \
+                  --random_output_len ${OSL} \
+                  --max-concurrency ${concurrency} \
+                  --num-prompts $((${concurrency}*10)) \
+                  --save-result --result-filename ${OUTPUT_RESULT_FILE} \
+                  --percentile-metrics ttft,tpot,itl,e2el \
+                  --ignore-eos
+          done
+        done
+      # done
+  done
+
+  
+
+volumeEnable: true
+
+volumeMounts: | 
+  - name: shared-pvc
+    mountPath: /shared-data
+  - name: tokenizer
+    mountPath: /work/models #{{ .Values.tokenizer.mountPath }}
+
+volumes: |
+  - name: tokenizer
+    hostPath:
+      path: {{ .Values.tokenizer.hostPath }}
+
+resources:

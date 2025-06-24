@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.serviceInfo.namespace }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  template:
+    metadata:
+      name: {{ .Release.Name }}
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: benchmark
+        image: {{ .Values.image }}
+        command: ["/bin/bash", "-c"]
+        args:
+          - | {{ tpl .Values.commandStr . | nindent 12 }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+          {{- tpl .Values.volumeMounts . | nindent 10 }}
+      restartPolicy: {{ .Values.restartPolicy }}
+      volumes:
+        {{- tpl .Values.volumes . | nindent 8 }}
