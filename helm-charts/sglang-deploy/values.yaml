@@ -1,8 +1,9 @@
 # LeaderWorkerSet 配置
 leaderWorkerSet:
   replicas: 1
-  size: 2
   restartPolicy: RecreateGroupOnPodRestart
+
+# restartPolicy: Always # POD重启策略
 
 # 镜像配置
 image:
@@ -15,23 +16,22 @@ model:
   hostPath: "/data/models"  # 主机模型路径
   mountPath: "/work/models" # 容器挂载路径
 
+# 节点
+nodeSize: 2
+
 # 资源分配
-resources:
-  leader:
-    gpu: 8
-    cpu: 0
-    memory: 0
-  worker:
-    gpu: 8
-    cpu: 0
-    memory: 0
+resourcesPerNode:
+  gpu: 8
+  cpu: 0
+  memory: 0
   # 共享内存配置
   sharedMemory: 128G
+
 
 # SGLang 服务器配置
 llmConfig:
   # 通用参数
-  memFractionStatic: 0.85   # 显存预留比例
+  memFractionStatic: 0.85   # 显存最高占用
   tp: 8
   trustRemoteCode: true
   dpAttantion: #--enable-dp-attention  # only for deepseek https://lmsys.org/blog/2024-12-04-sglang-v0-4/#data-parallelism-attention-for-deepseek-models
@@ -43,7 +43,7 @@ llmConfig:
   leader:
     port: 40000
     
-  # 网络配置
+  # 网络配置（用于worker与leader通信）
   distInitPort: 20000
 
 
@@ -67,7 +67,7 @@ network:
 # 服务配置
 service:
   enabled: true
-  name: sglang-leader
+  name: llm-service-endpoint
   type: ClusterIP
   port: 40000
   targetPort: 40000
@@ -88,7 +88,6 @@ commandStr: |
     --torch-compile-max-bs "{{ .Values.llmConfig.torchCompileMaxBs }}" \
     --dp {{ .Values.llmConfig.dp }} 
 
-
 envStr: |
   - name: NCCL_IB_CUDA_SUPPORT
     value: "{{ .Values.env.ncclIBCudaSupport }}"
@@ -103,12 +102,11 @@ envStr: |
   - name: NCCL_SOCKET_IFNAME
     value: "{{ .Values.env.ncclSocketIfname }}"
 
-
 volumes: |
   - name: dshm
     emptyDir:
       medium: Memory
-      sizeLimit: {{ .Values.resources.sharedMemory }}
+      sizeLimit: {{ .Values.resourcesPerNode.sharedMemory }}
   - name: model
     hostPath:
       path: {{ .Values.model.hostPath }}
@@ -124,24 +122,14 @@ volumeMounts: |
   - name: ib
     mountPath: /dev/infiniband
 
-workerResourcesStr: |
+ResourcesStr: |
   limits:
-    nvidia.com/gpu: "{{ .Values.resources.worker.gpu }}"
-    cpu: "{{ .Values.resources.worker.cpu }}"
-    memory: "{{ .Values.resources.worker.memory }}"
+    nvidia.com/gpu: "{{ .Values.resourcesPerNode.gpu }}"
+    cpu: "{{ .Values.resourcesPerNode.cpu }}"
+    memory: "{{ .Values.resourcesPerNode.memory }}"
   requests:
-    nvidia.com/gpu: "{{ .Values.resources.worker.gpu }}"
-    memory: "{{ .Values.resources.worker.memory }}"
-
-leaderResourcesStr: |
-  limits:
-    nvidia.com/gpu: "{{ .Values.resources.leader.gpu }}"
-    cpu: "{{ .Values.resources.leader.cpu }}"
-    memory: "{{ .Values.resources.leader.memory }}"
-  requests:
-    nvidia.com/gpu: "{{ .Values.resources.leader.gpu }}"
-    memory: "{{ .Values.resources.leader.memory }}"
-
+    nvidia.com/gpu: "{{ .Values.resourcesPerNode.gpu }}"
+    memory: "{{ .Values.resourcesPerNode.memory }}"
 
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
@@ -181,7 +169,7 @@ livenessProbeStr: |
     path: /health
     port: {{ .Values.llmConfig.leader.port }}
   initialDelaySeconds: 20
-  failureThreshold: 30  # 30次
+  failureThreshold: 5  # 5次
   periodSeconds: 30
   timeoutSeconds: 5
 

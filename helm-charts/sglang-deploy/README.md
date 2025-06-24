@@ -1,4 +1,4 @@
-# SGLang LeaderWorkerSet Helm Chart
+SGLang deploy
 
 用于在 Kubernetes 上部署 SGLang 分布式推理服务的 Helm Chart。
 
@@ -10,58 +10,34 @@
 ## 安装
 
 ```bash
-# 创建命名空间
-$ kubectl create namespace sglang
-
-# 部署 SGLang 服务
-$ helm install sglang-service ./sglang-deploy -n sglang \
-	--set model.hostPath="/path/to/Qwen/Qwen3-32B" \
-	--set leaderWorkerSet.size=2 \
-	--set resources.leader.gpu=8 \
-	--set resources.worker.gpu=8 \
-	--set llmConfig.tp=4 \
-	--set llmConfig.dp=2 \
-	--set llmConfig.modelName="Qwen3-32B" \
-	--set model.mountPath="/work/models" 
+# 部署模型服务
+$ helm install sglang-service ./sglang-deploy -n default \
+  --set nodeSize=$NODE_SIZE   \
+  --set resources.gpu=$GPU    \
+  --set llmConfig.tp=$TP      \
+  --set llmConfig.dp=1        \
+  --set model.hostPath=$MODEL 
 ```
 
 ## 核心配置参数
 
-| 参数                         | 描述                                     | 默认值           |
-| ---------------------------- | ---------------------------------------- | ---------------- |
-| `global.name`              | 部署名称                                 | `sglang`       |
-| `global.namespace`         | 命名空间                                 | `default`      |
-| `leaderWorkerSet.replicas` | LeaderWorkerSet 副本数                   | `1`            |
-| `leaderWorkerSet.size`     | 每组大小 (leader + workers)              | `2`            |
-| `image.repository`         | SGLang 镜像仓库                          | `sglang`       |
-| `image.tag`                | 镜像标签                                 | `latest`       |
-| `model.hostPath`           | 主机模型路径                             | `/data/models` |
-| `model.mountPath`          | 容器挂载路径                             | `/work/models` |
-| `resources.leader.gpu`     | Leader GPU 数量                          | `8`            |
-| `resources.worker.gpu`     | Worker GPU 数量                          | `8`            |
-| `llmConfig.tp`             | 张量并行度                               | 8                |
-| `llmConfig.dp`             | 数据并行度                               | 2                |
-| `service.port`             | 服务暴露端口                             | `40000`        |
-| `env.ncclIBDisable`        | NCCL：禁止使用RDMA                       | 0                |
-| `env.ncclIbGidIndex`       | NCCL：RDMA使用的GID index，RoCEv2设置为3 | 3                |
-| `env.ncclDebug`            | NCCL：显示nccl调试信息                   | INFO             |
-
-## 访问服务
-
-```bash
-# 通过服务端口访问
-
-
-# 端口转发到本地访问
-$ kubectl get service -n sglang
-NAME                    TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)     AGE
-sglang-service          ClusterIP   None            <none>        <none>      53s
-sglang-service-leader   ClusterIP   cluser_ip   <none>        40000/TCP   53s
-$ kubectl port-forward -n sglang svc/sglang-service-leader 40000:40000
-
-# 测试访问
-$ curl http://localhost:40000/v1/chat/completions
-```
+| 参数                            | 描述                   | 默认值                                         |
+| ------------------------------- | ---------------------- | ---------------------------------------------- |
+| leaderWorkerSet.replicas        | 副本数                 | 1                                              |
+| leaderWorkerSet.restartPolicy   | 重启策略               | RecreateGroupOnPodRestart                      |
+| image                           | 镜像相关配置           |                                                |
+| `model.hostPath`              | 主机模型路径           | `/data/models`                               |
+| `model.mountPath`             | 容器挂载路径           | `/work/models`                               |
+| resourcesPerNode                | 镜像标签               | `latest`                                     |
+| nodeSize                        | 节点数（leader+worker) | 2                                              |
+| llmConfig.leader                | leader节点服务端口     | 40000                                          |
+| `llmConfig.memFractionStatic` | 显存最高占用           | 0.85                                           |
+| `llmConfig.tp`                | 张量并行度             | 8                                              |
+| `llmConfig.dp`                | 数据并行度             | 2                                              |
+| `service.port`                | 服务暴露端口           | `40000`                                      |
+| `env`                         | 环境变量相关           | 默认开启RDMA，默认使用eth0作为socket interface |
+| service.enable                  | 启用服务               | 3                                              |
+| servce.port                     | 服务端口               | 40000                                          |
 
 ## 卸载
 

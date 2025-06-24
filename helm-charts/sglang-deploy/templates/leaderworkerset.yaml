@@ -7,7 +7,7 @@ metadata:
 spec:
   replicas: {{ .Values.leaderWorkerSet.replicas }}
   leaderWorkerTemplate:
-    size: {{ .Values.leaderWorkerSet.size }}
+    size: {{ .Values.nodeSize }}
     restartPolicy: {{ .Values.leaderWorkerSet.restartPolicy }}
     leaderTemplate:
       metadata:
@@ -25,6 +25,7 @@ spec:
           - name: {{ include "sglang.fullname" . }}-leader
             image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
             imagePullPolicy: {{ .Values.image.pullPolicy }}
+            # restartPolicy: {{ .Values.restartPolicy }}
             securityContext:
               privileged: true
             env:
@@ -33,7 +34,7 @@ spec:
             args:
               - | {{ tpl .Values.commandStr . | nindent 16 }}
             resources:
-              {{- tpl .Values.leaderResourcesStr . | nindent 14 }}
+              {{- tpl .Values.ResourcesStr . | nindent 14 }}
             ports:
               - containerPort: {{ .Values.llmConfig.leader.port }}
             livenessProbe:
@@ -44,7 +45,7 @@ spec:
               {{- tpl .Values.volumeMounts . | nindent 14 }}
         volumes:
           {{- tpl .Values.volumes . | nindent 10 }}
-                {{- with .Values.nodeSelector }}
+        {{- with .Values.nodeSelector }}
         nodeSelector:
           {{- toYaml . | nindent 10 }}
         {{- end }}
@@ -69,6 +70,7 @@ spec:
           - name: {{ include "sglang.fullname" . }}-worker
             image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
             imagePullPolicy: {{ .Values.image.pullPolicy }}
+            # restartPolicy: {{ .Values.restartPolicy }}
             securityContext:
               privileged: true
             env:
@@ -77,7 +79,7 @@ spec:
             args:
               - | {{ tpl .Values.commandStr . | nindent 16 }}
             resources:
-              {{- tpl .Values.workerResourcesStr . | nindent 14 }}
+              {{- tpl .Values.ResourcesStr . | nindent 14 }}
             volumeMounts:
               {{- tpl .Values.volumeMounts . | nindent 14 }}
         volumes:
