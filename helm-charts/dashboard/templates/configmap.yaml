@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-code
+data:
+  app.py: |
+    {{- .Files.Get "src/app.py" | nindent 4 }}
+  data_loader.py: |
+    {{- .Files.Get "src/data_loader.py" | nindent 4 }}
+  requirements.txt: |
+    {{- .Files.Get "src/requirements.txt" | nindent 4 }}
+  config.py: |
+    {{- .Files.Get "src/config.py" | nindent 4 }}

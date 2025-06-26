@@ -1,0 +1,48 @@
+# 服务配置
+service:
+  type: LoadBalancer
+  port: 8080            # 外部访问端口
+  targetPort: 8050    # 容器监听的端口
+  
+# 镜像配置
+image:
+  repository: python
+  tag: 3.9-slim
+  pullPolicy: IfNotPresent
+
+# 应用配置
+app:
+  replicas: 1
+  apiKey: "your-secret-api-key"  # 工作流使用的API密钥
+  dataRefreshInterval: 60  # 数据刷新间隔（秒）
+  reportsDir: "/app/reports"  # 报告存储目录
+
+# 持久化存储
+persistence:
+  enabled: true
+  storageClass: cfs-turbo
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  createPVC: true 
+  targetPV:
+
+# 资源限制
+resources:
+  # requests:
+  #   memory: "512Mi"
+  #   cpu: "500m"
+  # limits:
+  #   memory: "1Gi"
+  #   cpu: "1"
+
+# Ingress配置
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: model-viz.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

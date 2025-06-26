@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    app: {{ .Chart.Name }}
+spec:
+  replicas: {{ .Values.app.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.service.port }}
+        env:
+        - name: API_KEY
+          value: "{{ .Values.app.apiKey }}"
+        - name: DATA_REFRESH_INTERVAL
+          value: "{{ .Values.app.dataRefreshInterval }}"
+        - name: REPORTS_DIR
+          value: "{{ .Values.app.reportsDir }}"
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        - name: reports-data
+          mountPath: {{ .Values.app.reportsDir }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        workingDir: /app
+        command: ["sh", "-c"]
+        args: 
+          - pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt && python app.py
+      volumes:
+      - name: app-code
+        configMap:
+          name: {{ .Chart.Name }}-code
+      - name: reports-data
+        persistentVolumeClaim:
+          claimName: {{ .Chart.Name }}-pvc
