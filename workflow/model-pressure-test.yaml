@@ -6,8 +6,6 @@ metadata:
 spec:
   serviceAccountName: model-test-runner
   entrypoint: main
-  
-  # volumeClaimTemplates:
   volumes:
   - name: shared-pvc
     persistentVolumeClaim:
@@ -16,15 +14,15 @@ spec:
   arguments:
     parameters:
     - name: models
-      value: '["/data/Qwen/Qwen3-32B", "/data/deepseek-ai/DeepSeek-R1-0528"]'  # , "/path/to/deepseek-ai/DeepSeek-R1-0528"
+      value: '["/path/to/Qwen/Qwen3-32B", "/path/to/deepseek-ai/DeepSeek-R1-0528"]'  # , "/path/to/deepseek-ai/DeepSeek-R1-0528"
     - name: engines
       value: '["sglang"]'
     - name: node_size
-      value: '[2, 4]'  # '[1, 2, 4]'
+      value: '[1, 2, 3, 4]'  # '[1, 2, 4]'
     - name: gpu_per_node
       value: '[8]' # '[2, 4, 8]'
     - name: tp
-      value: '[2, 4, 8, 16]' # '[4, 8, 16, 32]'
+      value: '[4, 8, 16, 32]' # '[4, 8, 16, 32]'
     - name: chart_path
       value: "/shared-data/helm-chart"
     - name: model_timeout
@@ -34,9 +32,9 @@ spec:
     - name: max_retries
       value: "1"  # 最大重试次数
     - name: ISL
-      value: "(500 1000 3000)"
+      value: "(3000 1000 500)"
     - name: OSL
-      value: "(1000 1000 150)"
+      value: "(500 1000 1000)"
     - name: concurrency
       value: "1 4 16 32 64 128"  # 没启用
     
@@ -218,7 +216,7 @@ spec:
           - name: release_name
             value: "{{steps.deploy-model.outputs.parameters.release_name}}"
           - name: pre_status
-            value: "{{steps.deploy-model.outputs.parameters.status_code}}"
+            value: "{{steps.wait-model-ready.outputs.parameters.status_code}}"
           - name: ISL
             value: "{{workflow.parameters.ISL}}"
           - name: OSL
@@ -306,7 +304,7 @@ spec:
           set +e
           helm install $TEST_ID "{{workflow.parameters.chart_path}}"/$ENGINE-deploy  \
             --set nodeSize=$NODE_SIZE \
-            --set resources.gpu=$GPU \
+            --set resourcesPerNode.gpu=$GPU \
             --set llmConfig.tp=$TP \
             --set llmConfig.dp=1 \
             --set model.hostPath=$MODEL \
@@ -391,8 +389,9 @@ spec:
           if [ -z "$SERVICE_NAME" ]; then
             echo "ERROR: Service not found for release $release_name"
             echo "false" > /tmp/status_code
+            exit 0
           fi
-          
+          echo "success" > /tmp/status_code
 
   # 压力测试模板 - 添加超时和等待
   - name: run-pressure-test
@@ -494,7 +493,7 @@ spec:
       command: [sh, -c]
       args:
         - |
-          echo "success" > /tmp/status_code
+          echo "false" > /tmp/status_code
           pre_status="{{inputs.parameters.pre_status}}"
           if [ "$pre_status" = "false" ]; then
             echo "Skipping"
@@ -536,10 +535,9 @@ spec:
             echo "Current job status:"
             kubectl describe job $JOB_NAME
             echo "false" > /tmp/status_code
-            exit 1
+            exit 0
           fi
-          
-          exit 0
+
 
 
   # 清理模板
@@ -623,12 +621,12 @@ spec:
       args:
         - |
           # 安装依赖
-          pip install -i https://mirrors.cloud.tencent.com/pypi/simple pandas matplotlib seaborn requests jq > /dev/null
-          
+          pip install -i https://mirrors.cloud.tencent.com/pypi/simple pandas requests > /dev/null
+
           # 设置路径
           REPORT_DIR="/shared-data/reports/{{workflow.name}}"
           SUMMARY_DIR="/shared-data/reports/{{workflow.name}}/summary"
-          mkdir -p $SUMMARY_DIR
+          mkdir -p "$SUMMARY_DIR" # 确保目录存在
           
           # 生成Python处理脚本
           cat > process_reports.py << 'EOF'
@@ -637,7 +635,7 @@ spec:
           import re
           import requests
           from datetime import datetime
-          from dateutil.parser import parse
+          from dateutil.parser import parse # For parsing timestamp strings
           import math
 
           def parse_config_from_dirname(dirname):
@@ -702,7 +700,7 @@ spec:
                           
                       # 读取JSON数据
                       try:
-                          with open(file_path, 'r') as f:
+                          with open(file_path, 'r', encoding='utf-8') as f: # Ensure utf-8 encoding
                               data = json.load(f)
                       except Exception as e:
                           print(f"错误: 无法读取文件 {file_path} - {e}")
@@ -782,115 +780,55 @@ spec:
                   return (dep["node_size"] * hourly_cost_per_node) / tokens_per_hour
               return 0
 
-          def send_to_influxdb(results):
-              """将结果发送到InfluxDB"""
-              # 从环境变量获取数据库配置
-              influx_url = os.getenv('INFLUXDB_URL')
-              influx_token = os.getenv('INFLUXDB_TOKEN')
-              influx_org = os.getenv('INFLUXDB_ORG')
-              influx_bucket = os.getenv('INFLUXDB_BUCKET')
-              
-              if not all([influx_url, influx_token, influx_org, influx_bucket]):
-                  print("警告: InfluxDB环境变量未配置完整，跳过发送")
+          def send_to_dashboard(json_filepath, dashboard_url, api_key):
+              """
+              将汇总的JSON文件发送到Dash Dashboard服务，模仿 curl -d @file.json
+              文件内容将作为请求体发送。
+              """
+              if not dashboard_url or not api_key:
+                  print("警告: Dashboard URL 或 API Key 未配置完整，跳过发送到Dashboard。")
                   return False
-              
-              # 构造API端点
-              write_url = f"{influx_url.rstrip('/')}/api/v2/write?org={influx_org}&bucket={influx_bucket}&precision=ns"
-              
-              # 准备行协议数据
-              payload_lines = []
-              
-              for result in results:
-                  # 提取各部分数据
-                  dep = result["deployment_config"]
-                  test = result["test_config"]
-                  metrics = result["metrics"]
-                  meta = result["metadata"]
-                  
-                  # 构造标签（维度）
-                  tags = [
-                      f"model={escape_influx_value(dep['model'])}",
-                      f"engine={escape_influx_value(dep['engine'])}",
-                      f"node_size={dep['node_size']}",
-                      f"gpu_per_node={dep['gpu_per_node']}",
-                      f"tp={dep['tp']}",
-                      f"ISL={test['ISL']}",
-                      f"OSL={test['OSL']}",
-                      f"concurrency={test['concurrency']}",
-                      f"workflow={escape_influx_value(meta['workflow'])}"
-                  ]
-                  
-                  # 构造字段（指标）
-                  fields = [
-                      f"request_throughput={format_float(metrics['request_throughput'])}",
-                      f"output_throughput={format_float(metrics['output_throughput'])}",
-                      f"total_token_throughput={format_float(metrics['total_token_throughput'])}",
-                      f"mean_ttft_ms={format_float(metrics['mean_ttft_ms'])}",
-                      f"p99_ttft_ms={format_float(metrics['p99_ttft_ms'])}",
-                      f"mean_tpot_ms={format_float(metrics['mean_tpot_ms'])}",
-                      f"p99_tpot_ms={format_float(metrics['p99_tpot_ms'])}",
-                      f"mean_e2el_ms={format_float(metrics['mean_e2el_ms'])}",
-                      f"p99_e2el_ms={format_float(metrics['p99_e2el_ms'])}",
-                      f"completed={metrics['completed']}i",
-                      f"total_input_tokens={metrics['total_input_tokens']}i",
-                      f"total_output_tokens={metrics['total_output_tokens']}i",
-                      f"gpu_utilization={format_float(metrics['gpu_utilization'])}",
-                      f"cost_per_token={format_float(metrics['cost_per_token'])}"
-                  ]
-                  
-                  # 转换时间戳
-                  try:
-                      ts = parse(meta['timestamp'])
-                      timestamp = int(ts.timestamp() * 1e9)  # 转换为纳秒
-                  except:
-                      timestamp = int(datetime.utcnow().timestamp() * 1e9)
-                  
-                  # 构建行协议
-                  tags_str = ",".join(tags)
-                  fields_str = ",".join(fields)
-                  payload_lines.append(f"benchmark,{tags_str} {fields_str} {timestamp}")
-              
-              # 发送数据
+
+              if not os.path.exists(json_filepath):
+                  print(f"错误: 汇总JSON文件不存在: {json_filepath}")
+                  return False
+
               headers = {
-                  'Authorization': f'Token {influx_token}',
-                  'Content-Type': 'text/plain'
+                  "X-API-Key": api_key,
+                  "Content-Type": "application/json" # 明确指定内容类型
               }
-              payload = "\n".join(payload_lines)
-              
+
               try:
-                  response = requests.post(write_url, headers=headers, data=payload)
-                  if response.status_code == 204:
-                      print(f"成功发送 {len(results)} 条数据到InfluxDB")
+                  with open(json_filepath, 'rb') as f: # 以二进制模式读取文件内容
+                      print(f"正在将文件 {json_filepath} 发送到 {dashboard_url}...")
+                      # 直接将文件对象作为data参数，requests会处理文件上传
+                      response = requests.post(dashboard_url, headers=headers, data=f, timeout=60) # 增加超时时间
+                      response.raise_for_status() # 对 4xx/5xx 状态码抛出异常
+                      print(f"成功发送数据到Dashboard: {response.status_code} - {response.text}")
                       return True
-                  else:
-                      print(f"发送到InfluxDB失败: {response.status_code} - {response.text}")
-                      print("示例数据行:", payload_lines[0] if payload_lines else "无数据")
-                      return False
-              except Exception as e:
-                  print(f"发送到InfluxDB时出错: {str(e)}")
+              except requests.exceptions.Timeout:
+                  print(f"发送数据到Dashboard超时: 从 {json_filepath} 到 {dashboard_url}")
                   return False
-
-          def escape_influx_value(value):
-              """转义InfluxDB标签值中的特殊字符"""
-              return str(value).replace(",", "\\,").replace(" ", "\\ ").replace("=", "\\=")
-
-          def format_float(value):
-              """格式化浮点数，处理NaN和Inf"""
-              if math.isnan(value) or math.isinf(value):
-                  return "0.0"
-              return f"{value:.6f}"
+              except requests.exceptions.RequestException as e:
+                  print(f"发送数据到Dashboard失败: {e}")
+                  return False
+              except Exception as e:
+                  print(f"发送数据到Dashboard时发生未知错误: {e}")
+                  return False
 
           def save_summary_json(results, output_dir):
               """保存汇总数据为JSON文件"""
               if not results:
+                  print("没有数据可供保存为摘要JSON。")
                   return None
               
               workflow_name = results[0]['metadata']['workflow'] if results else "unknown"
               os.makedirs(output_dir, exist_ok=True)
               output_file = os.path.join(output_dir, f"{workflow_name}_summary.json")
               
-              with open(output_file, 'w') as f:
-                  json.dump(results, f, indent=4)
+              # 使用ensure_ascii=False和indent=4来确保中文不被转义，并格式化输出
+              with open(output_file, 'w', encoding='utf-8') as f: # Ensure utf-8 encoding
+                  json.dump(results, f, indent=4, ensure_ascii=False)
               
               print(f"汇总数据已保存至: {output_file}")
               return output_file
@@ -904,6 +842,10 @@ spec:
               
               # 从环境变量获取输出目录
               output_dir = os.getenv('OUTPUT_DIR', '/var/argo/outputs')
+
+              # 从环境变量获取Dashboard配置
+              dashboard_url = os.getenv('DASHBOARD_URL')
+              dashboard_api_key = os.getenv('DASHBOARD_API_KEY')
               
               print(f"处理工作流: {os.path.basename(workflow_dir)}")
               
@@ -915,11 +857,13 @@ spec:
                   return
                   
               # 保存JSON摘要
-              json_file = save_summary_json(results, output_dir)
+              json_file_path = save_summary_json(results, output_dir) 
               
-              # 发送数据到InfluxDB
-              if os.getenv('SEND_TO_INFLUXDB', 'true').lower() == 'true':
-                  send_to_influxdb(results)
+              # 发送数据到Dashboard
+              if os.getenv('SEND_TO_DASHBOARD', 'true').lower() == 'true' and json_file_path:
+                  print(f"准备发送汇总文件 {json_file_path} 到 Dashboard 服务...")
+                  # 直接调用Python函数发送
+                  send_to_dashboard(json_file_path, dashboard_url, dashboard_api_key)
 
           if __name__ == "__main__":
               main()
@@ -927,15 +871,15 @@ spec:
           
           # 设置环境变量并运行Python脚本
 
-          export INFLUXDB_URL=http://influxdb-influxdb2.monitoring.svc.cluster.local:8086
-          export INFLUXDB_TOKEN=my-super-secret-auth-token
-          export INFLUXDB_ORG=my-org
-          export INFLUXDB_BUCKET=benchmarks
-          export SEND_TO_DB=true
-          # export VIZ_BASE_URL=
+          # Dashboard 相关的环境变量
+          export DASHBOARD_URL="http://llm-dashboard-service:8080/api/reports" # 根据您的Dash Dashboard实际地址修改
+          export DASHBOARD_API_KEY="your-secret-api-key" # 确保这与您Dashboard配置的API_KEY一致
+          export SEND_TO_DASHBOARD="true" # 新增一个标志，明确控制是否发送到Dashboard
+          
           export WORKFLOW_DIR="$REPORT_DIR"
           export OUTPUT_DIR="$SUMMARY_DIR"
           
+          # 直接运行Python脚本
           python process_reports.py
 
       volumeMounts:
