@@ -142,11 +142,14 @@ spec:
           - name: pre_status
             value: "{{steps.deploy-model.outputs.parameters.status_code}}"
           - name: namespace
-            value: "default"  # 或者使用工作流命名空间
+            value: "{{workflow.namespace}}"
         # when: "{{steps.deploy-model.outputs.parameters.status_code}} == true"
 
-    - - name: run-test
-        template: run-pressure-test
+    - - name: run-pressure-test
+        templateRef:
+          name: pressure-test-operator
+          template: pressure-test
+          clusterScope: true
         arguments:
           parameters:
           - name: config
@@ -161,6 +164,14 @@ spec:
             value: "{{workflow.parameters.OSL}}"
           - name: concurrency
             value: "{{workflow.parameters.concurrency}}"
+          - name: test_timeout
+            value: "{{workflow.parameters.test_timeout}}"
+          - name: helm_chart_path
+            value: "/shared-data/helm-chart/vllm-benchmark"
+          - name: workflow_name
+            value: "{{workflow.name}}"
+          - name: namespace
+            value: "{{workflow.namespace}}"
         # when: "{{steps.wait-model-ready.outputs.parameters.status_code}} == true"
 
     # 监控测试Job状态
@@ -178,8 +189,8 @@ spec:
           - name: timeout
             value: "{{workflow.parameters.test_timeout}}"
           - name: pre_status
-            value: "{{steps.run-test.outputs.parameters.status_code}}"
-        # when: "{{steps.run-test.outputs.parameters.status_code}} == true"
+            value: "{{steps.run-pressure-test.outputs.parameters.status_code}}"
+        # when: "{{steps.run-pressure-test.outputs.parameters.status_code}} == true"
 
     - - name: cleanup
         template: cleanup-deployment
@@ -201,90 +212,6 @@ spec:
         when: "{{steps.deploy-model.outputs.parameters.status_code}} == false || 
                 {{steps.wait-model-ready.status}} == false || 
                 {{steps.monitor-test-job.status}} == false "
-
-  # 压力测试模板
-  - name: run-pressure-test
-    inputs:
-      parameters:
-      - name: config
-      - name: release_name
-      - name: pre_status
-      - name: ISL
-      - name: OSL
-      - name: concurrency
-    outputs:
-      parameters:
-      - name: status_code
-        valueFrom:
-          path: /tmp/status_code
-    container:
-      image: alpine/k8s:1.30.14
-      command: [sh, -c]
-      args:
-        - |
-          set +e
-          echo "false" > /tmp/status_code
-          pre_status="{{inputs.parameters.pre_status}}"
-          if [ "$pre_status" = "false" ]; then
-            echo "Skipping"
-            exit 0
-          fi
-          # 解析测试参数
-          CONFIG='{{inputs.parameters.config}}'
-          MODEL_PATH=$(echo "$CONFIG" | jq -r '.deployment.model')
-          MODEL_NAME=$(basename "$MODEL_PATH")  
-          ENGINE=$(echo "$CONFIG" | jq -r '.deployment.engine')
-          TOKENIZER=$(echo "$CONFIG" | jq -r '.test.tokenizer')
-          GPU=$(echo "$CONFIG" | jq -r '.deployment.gpu_per_node')
-          NODE_SIZE=$(echo "$CONFIG" | jq -r '.deployment.node_size')
-          TP=$(echo "$CONFIG" | jq -r '.deployment.tp')
-          ISL="{{inputs.parameters.ISL}}"
-          OSL="{{inputs.parameters.OSL}}"
-          concurrency="{{inputs.parameters.concurrency}}"
-
-          # 获取模型服务名称
-          release_name="{{inputs.parameters.release_name}}"
-          SERVICE_NAME=$(kubectl get svc -l app.kubernetes.io/instance=$release_name -o jsonpath='{.items[0].metadata.name}')
-          
-          # 报告路径
-          REPORT_DIR="/shared-data/reports/{{workflow.name}}/${MODEL_NAME}_${ENGINE}_ns${NODE_SIZE}_gpu${GPU}_tp${TP}"
-          mkdir -p $REPORT_DIR
-          
-          # 运行压力测试
-          echo "Starting pressure test for $MODEL_NAME-$ENGINE"
-          set -x
-          helm install $release_name-test /shared-data/helm-chart/vllm-benchmark \
-            --set config.model=$MODEL_NAME \
-            --set config.outputPath=$REPORT_DIR \
-            --set tokenizer.hostPath=$TOKENIZER \
-            --set serviceInfo.name=$SERVICE_NAME \
-            --set serviceInfo.attempts=10 \
-            --set config.ISL="$ISL" \
-            --set config.OSL="$OSL" \
-            --timeout {{workflow.parameters.test_timeout}}s \
-            --wait
-          
-          HELM_EXIT_CODE=$?
-          # 记录部署结果
-          END_TIME=$(date +%s)
-          DURATION=$((END_TIME - START_TIME))
-          
-          if [ $HELM_EXIT_CODE -ne 0 ]; then
-            echo "Pressure test failed for model: $MODEL_NAME"
-            # 记录失败信息
-            FAIL_DIR="/shared-data/failed-tests/{{workflow.name}}"
-            mkdir -p $FAIL_DIR
-            echo "$CONFIG" >> $FAIL_DIR/$TEST_ID-failed.json
-            echo "Pressure test failed" >> $FAIL_DIR/$TEST_ID-failed.json
-            echo "false" > /tmp/status_code
-          else
-            echo "Successfully deployed model: $MODEL in $DURATION seconds"
-            echo "success" > /tmp/status_code
-          fi
-          echo "----------------------------------------"
-      volumeMounts:
-      - name: shared-pvc
-        mountPath: /shared-data
 
   # 清理模板
   - name: cleanup-deployment
