@@ -193,11 +193,20 @@ spec:
         # when: "{{steps.run-pressure-test.outputs.parameters.status_code}} == true"
 
     - - name: cleanup
-        template: cleanup-deployment
+        templateRef:
+          name: cleanup-operator
+          template: cleanup-resources
+          clusterScope: true
         arguments:
           parameters:
           - name: release_name
             value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+          - name: namespace
+            value: "{{workflow.namespace}}"
+          - name: cleanup_strategy
+            value: "aggressive" 
+          - name: delete_pvcs
+            value: "false"
 
     - - name: handle-deploy-failure
         template: handle-failure
@@ -212,37 +221,6 @@ spec:
         when: "{{steps.deploy-model.outputs.parameters.status_code}} == false || 
                 {{steps.wait-model-ready.status}} == false || 
                 {{steps.monitor-test-job.status}} == false "
-
-  # 清理模板
-  - name: cleanup-deployment
-    inputs:
-      parameters:
-      - name: release_name
-    container:
-      image: alpine/k8s:1.30.14
-      command: [sh, -c]
-      args:
-        - |
-          release_name="{{inputs.parameters.release_name}}"
-          
-          # 清理模型部署
-          echo "Cleaning up model deployment: $release_name"
-          helm uninstall $release_name || true
-          
-          # 清理测试任务
-          echo "Cleaning up test job: ${release_name}-test"
-          helm uninstall ${release_name}-test || true
-          
-          # 确保所有相关Pod被终止
-          echo "Deleting any remaining pods"
-          kubectl delete pods -l app.kubernetes.io/instance=$release_name --force --grace-period=0 || true
-          kubectl delete pods -l app.kubernetes.io/instance=${release_name}-test --force --grace-period=0 || true
-          
-          # 删除PVC（如果有）
-          # echo "Deleting PVCs"
-          # kubectl delete pvc -l app.kubernetes.io/instance=$release_name || true
-          
-          echo "Successfully cleaned up all resources for $release_name"
 
   # 处理失败情况
   - name: handle-failure

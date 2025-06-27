@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: cleanup-operator
+spec:
+  entrypoint: cleanup-resources
+  arguments:
+    parameters:
+    - name: release_name
+    - name: namespace
+      default: "default"
+    - name: cleanup_strategy
+      default: "standard"  # 支持: standard, aggressive, minimal
+    - name: delete_pvcs
+      default: "false"
+  
+  templates:
+  - name: cleanup-resources
+    inputs:
+      parameters:
+      - name: release_name
+      - name: namespace
+      - name: cleanup_strategy
+      - name: delete_pvcs
+    container:
+      image: alpine/k8s:1.30.14
+      command: [sh, "-c"]
+      args:
+        - |
+          # 设置清理策略
+          RELEASE_NAME="{{inputs.parameters.release_name}}"
+          NAMESPACE="{{inputs.parameters.namespace}}"
+          CLEANUP_STRATEGY="{{inputs.parameters.cleanup_strategy}}"
+          DELETE_PVCS="{{inputs.parameters.delete_pvcs}}"
+          
+          echo "Starting cleanup for release: $RELEASE_NAME in namespace $NAMESPACE"
+          echo "Cleanup strategy: $CLEANUP_STRATEGY"
+          echo "Delete PVCs: $DELETE_PVCS"
+          
+          # 标准清理：删除 Helm 发布
+          if [ "$CLEANUP_STRATEGY" != "minimal" ]; then
+            echo "Uninstalling Helm releases..."
+            helm uninstall $RELEASE_NAME -n $NAMESPACE || true
+            helm uninstall ${RELEASE_NAME}-test -n $NAMESPACE || true
+          fi
+          
+          # 激进清理：强制删除所有相关资源
+          if [ "$CLEANUP_STRATEGY" = "aggressive" ]; then
+            echo "Force deleting all related resources..."
+            
+            # 删除所有相关资源
+            kubectl delete all -l app.kubernetes.io/instance=$RELEASE_NAME -n $NAMESPACE --force --grace-period=0 || true
+            kubectl delete all -l app.kubernetes.io/instance=${RELEASE_NAME}-test -n $NAMESPACE --force --grace-period=0 || true
+            
+            # 删除自定义资源
+            kubectl delete crd -l app.kubernetes.io/instance=$RELEASE_NAME -n $NAMESPACE || true
+            
+            # 删除 PVC
+            if [ "$DELETE_PVCS" = "true" ]; then
+              echo "Deleting PVCs..."
+              kubectl delete pvc -l app.kubernetes.io/instance=$RELEASE_NAME -n $NAMESPACE || true
+              kubectl delete pvc -l app.kubernetes.io/instance=${RELEASE_NAME}-test -n $NAMESPACE || true
+            fi
+          fi
+          
+          # 最小清理：仅删除 Pods（用于快速重启）
+          if [ "$CLEANUP_STRATEGY" = "minimal" ]; then
+            echo "Deleting pods only..."
+            kubectl delete pods -l app.kubernetes.io/instance=$RELEASE_NAME -n $NAMESPACE --force --grace-period=0 || true
+            kubectl delete pods -l app.kubernetes.io/instance=${RELEASE_NAME}-test -n $NAMESPACE --force --grace-period=0 || true
+          fi
+          
+          echo "Cleanup completed for $RELEASE_NAME"
