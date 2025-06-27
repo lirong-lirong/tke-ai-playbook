@@ -125,16 +125,24 @@ spec:
           - name: max_retries
             value: "{{workflow.parameters.max_retries}}"
 
+    # 等待模型就绪
     - - name: wait-model-ready
-        template: wait-model-ready
+        templateRef:
+          name: wait-resource-operator
+          template: wait-for-resource
+          clusterScope: true
         arguments:
           parameters:
-          - name: config
-            value: "{{inputs.parameters.test_config}}"
-          - name: release_name
+          - name: resource_type
+            value: "statefulset"
+          - name: resource_name
             value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+          - name: timeout
+            value: "{{workflow.parameters.model_timeout}}"
           - name: pre_status
             value: "{{steps.deploy-model.outputs.parameters.status_code}}"
+          - name: namespace
+            value: "default"  # 或者使用工作流命名空间
         # when: "{{steps.deploy-model.outputs.parameters.status_code}} == true"
 
     - - name: run-test
@@ -154,13 +162,21 @@ spec:
           - name: concurrency
             value: "{{workflow.parameters.concurrency}}"
         # when: "{{steps.wait-model-ready.outputs.parameters.status_code}} == true"
-        
+
+    # 监控测试Job状态
     - - name: monitor-test-job
-        template: monitor-test-job
+        templateRef:
+          name: wait-resource-operator
+          template: wait-for-resource
+          clusterScope: true
         arguments:
           parameters:
-          - name: release_name
-            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+          - name: resource_type
+            value: "job"
+          - name: resource_name
+            value: "{{steps.deploy-model.outputs.parameters.release_name}}-test"
+          - name: timeout
+            value: "{{workflow.parameters.test_timeout}}"
           - name: pre_status
             value: "{{steps.run-test.outputs.parameters.status_code}}"
         # when: "{{steps.run-test.outputs.parameters.status_code}} == true"
@@ -186,63 +202,7 @@ spec:
                 {{steps.wait-model-ready.status}} == false || 
                 {{steps.monitor-test-job.status}} == false "
 
-
-  # 等待模型就绪
-  - name: wait-model-ready
-    inputs:
-      parameters:
-      - name: config
-      - name: release_name
-      - name: pre_status
-    outputs:
-      parameters:
-      - name: status_code
-        valueFrom: 
-          path: /tmp/status_code
-    retryStrategy:
-      limit: "{{workflow.parameters.max_retries}}"
-      retryPolicy: "OnFailure"
-    container:
-      image: bitnami/kubectl:latest
-      command: [sh, -c]
-      args:
-        - |
-          echo "false" > /tmp/status_code
-          pre_status="{{inputs.parameters.pre_status}}"
-          if [ "$pre_status" = "false" ]; then
-            echo "Skipping"
-            exit 0
-          fi
-          # 获取Helm release名称
-          release_name="{{inputs.parameters.release_name}}"
-          
-          # 解析模型类型
-          CONFIG='{{inputs.parameters.config}}'
-          MODEL=$(echo "$CONFIG" | jq -r '.deployment.model')
-          
-          # # 确定资源类型
-          RESOURCE_TYPE="statefulset"
-          
-          # 等待资源完全就绪
-          echo "Waiting for $RESOURCE_TYPE/$release_name to be ready..."
-          
-          # 设置超时
-          TIMEOUT={{workflow.parameters.model_timeout}}
-          START_TIME=$(date +%s)
-          
-          # 等待部署完成
-          kubectl rollout status $RESOURCE_TYPE/$release_name --timeout=${TIMEOUT}s
-          
-          # 检查readinessProbe
-          SERVICE_NAME=$(kubectl get svc -l app.kubernetes.io/instance=$release_name -o jsonpath='{.items[0].metadata.name}')
-          if [ -z "$SERVICE_NAME" ]; then
-            echo "ERROR: Service not found for release $release_name"
-            echo "false" > /tmp/status_code
-            exit 0
-          fi
-          echo "success" > /tmp/status_code
-
-  # 压力测试模板 - 添加超时和等待
+  # 压力测试模板
   - name: run-pressure-test
     inputs:
       parameters:
@@ -325,69 +285,6 @@ spec:
       volumeMounts:
       - name: shared-pvc
         mountPath: /shared-data
-
-  # 监控测试Job状态
-  - name: monitor-test-job
-    inputs:
-      parameters:
-      - name: release_name
-      - name: pre_status
-    outputs:
-      parameters:
-      - name: status_code 
-        valueFrom:
-          path: /tmp/status_code 
-    container:
-      image: bitnami/kubectl:latest
-      command: [sh, -c]
-      args:
-        - |
-          echo "false" > /tmp/status_code
-          pre_status="{{inputs.parameters.pre_status}}"
-          if [ "$pre_status" = "false" ]; then
-            echo "Skipping"
-            exit 0
-          fi
-          release_name="{{inputs.parameters.release_name}}"
-          JOB_NAME="${release_name}-test"
-          echo "Monitoring test job: $JOB_NAME"
-          
-          TIMEOUT={{workflow.parameters.test_timeout}}
-          end_time=$(( $(date +%s) + TIMEOUT ))
-          job_completed=false
-
-          while [ $(date +%s) -lt $end_time ] && [ "$job_completed" = "false" ]; do
-            # 获取Job状态
-            status=$(kubectl get job $JOB_NAME -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null)
-            
-            # 检查是否完成（包含成功或失败）
-            if echo "$status" | grep -q "True"; then
-              # 确定是成功还是失败
-              if kubectl get job $JOB_NAME -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null | grep -q "True"; then
-                echo "Test job completed successfully"
-                echo "success" > /tmp/status_code
-                job_completed="success"
-              else
-                echo "Test job failed"
-                echo "false" > /tmp/status_code
-                job_completed="failed"
-              fi
-            fi
-            
-            # 等待5秒再次检查
-            [ "$job_completed" = "false" ] && sleep 5
-          done
-          
-          # 处理超时情况
-          if [ "$job_completed" = "false" ]; then
-            echo "ERROR: Test job did not complete within timeout (${TIMEOUT}s)"
-            echo "Current job status:"
-            kubectl describe job $JOB_NAME
-            echo "false" > /tmp/status_code
-            exit 0
-          fi
-
-
 
   # 清理模板
   - name: cleanup-deployment

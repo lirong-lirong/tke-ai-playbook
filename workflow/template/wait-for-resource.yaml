@@ -1,0 +1,97 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: wait-resource-operator
+spec:
+  entrypoint: wait-for-resource
+  arguments:
+    parameters:
+    - name: resource_type
+    - name: resource_name
+    - name: timeout
+    - name: pre_status
+    - name: namespace
+      value: "default"
+  
+  templates:
+  - name: wait-for-resource
+    inputs:
+      parameters:
+      - name: resource_type
+      - name: resource_name
+      - name: timeout
+      - name: pre_status
+      - name: namespace
+        value: "default"
+    outputs:
+      parameters:
+      - name: status_code
+        valueFrom:
+          path: /tmp/status_code
+    container:
+      image: bitnami/kubectl:latest
+      command: [sh, -c]
+      args:
+        - |
+          # 初始化状态
+          echo "false" > /tmp/status_code
+          
+          # 跳过条件
+          if [ "{{inputs.parameters.pre_status}}" = "false" ]; then
+            echo "Skipping due to previous failure"
+            exit 0
+          fi
+          
+          # 设置超时
+          END_TIME=$(( $(date +%s) + {{inputs.parameters.timeout}} ))
+          
+          # 资源类型处理
+          case "{{inputs.parameters.resource_type}}" in
+            statefulset)
+              echo "Waiting for StatefulSet {{inputs.parameters.resource_name}} to be ready"
+              kubectl rollout status statefulset/{{inputs.parameters.resource_name}} -n {{inputs.parameters.namespace}} --timeout={{inputs.parameters.timeout}}s
+              if [ $? -eq 0 ]; then
+                # 检查对应的Service
+                SERVICE_NAME=$(kubectl get svc -l app.kubernetes.io/instance={{inputs.parameters.resource_name}} -n {{inputs.parameters.namespace}} -o jsonpath='{.items[0].metadata.name}')
+                if [ -n "$SERVICE_NAME" ]; then
+                  echo "StatefulSet and Service ready"
+                  echo "true" > /tmp/status_code
+                else
+                  echo "Service not found"
+                fi
+              fi
+              ;;
+              
+            job)
+              echo "Monitoring Job {{inputs.parameters.resource_name}}"
+              job_completed=false
+              
+              while [ $(date +%s) -lt $END_TIME ] && [ "$job_completed" = "false" ]; do
+                status=$(kubectl get job {{inputs.parameters.resource_name}} -n {{inputs.parameters.namespace}} -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null)
+                
+                if echo "$status" | grep -q "True"; then
+                  # 成功检查
+                  if kubectl get job {{inputs.parameters.resource_name}} -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' | grep -q "True"; then
+                    job_completed="success"
+                  else
+                    job_completed="failed"
+                  fi
+                fi
+                
+                [ "$job_completed" = "false" ] && sleep 5
+              done
+              
+              # 处理结果
+              if [ "$job_completed" = "success" ]; then
+                echo "true" > /tmp/status_code
+              elif [ "$job_completed" = "failed" ]; then
+                echo "Job failed"
+              else
+                echo "Job did not complete within timeout"
+              fi
+              ;;
+              
+            *)
+              echo "Unsupported resource type: {{inputs.parameters.resource_type}}"
+              ;;
+          esac
