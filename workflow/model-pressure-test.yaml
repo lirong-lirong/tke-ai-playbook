@@ -46,7 +46,22 @@ spec:
     - - name: prepare-pvc
         template: prepare-pvc
     - - name: generate-test-matrix
-        template: generate-test-configs
+        templateRef:
+          name: genrate-config
+          template: genrate-config
+          clusterScope: true
+        arguments:
+          parameters:
+          - name: models
+            value: "{{workflow.parameters.models}}"
+          - name: engines
+            value: "{{workflow.parameters.engines}}"
+          - name: node_size
+            value: "{{workflow.parameters.node_size}}"
+          - name: gpu_per_node
+            value: "{{workflow.parameters.gpu_per_node}}"
+          - name: tp
+            value: "{{workflow.parameters.tp}}"
     - - name: run-all-tests
         template: test-loop
         arguments:
@@ -84,99 +99,6 @@ spec:
       volumeMounts:
       - name: shared-pvc
         mountPath: /shared-data
-
-  # 生成测试配置矩阵 - 添加更严格的验证
-  - name: generate-test-configs
-    script:
-      image: python:3.9-slim
-      command: [python]
-      source: |
-        import json
-        import itertools
-        import os
-        
-        # 从工作流参数获取配置
-        models = json.loads(os.environ["MODELS"])
-        engines = json.loads(os.environ["ENGINES"])
-        node_size = json.loads(os.environ["NODE_SIZE"])
-        gpu_per_node = json.loads(os.environ["GPU_PER_NODE"])
-        tp_list = json.loads(os.environ["TP"])
-        
-        # 自定义函数：验证配置合法性
-        def is_valid(model, node_size, gpu_per_node, tp):
-            total_gpu = node_size * gpu_per_node
-            # 1. TP必须整除总GPU数
-            if total_gpu % tp != 0:
-                return False, "TP must divide total GPU count"
-                
-            # 2. 特定模型的GPU数量要求
-            if "deepseek" in model.lower() and (total_gpu <= 8 or tp <= 8):
-                return False, "DeepSeek models require at least 8 GPUs"
-                
-            # # 3. TP不能超过单节点GPU数
-            # if tp > gpu_per_node:
-            #     return False, "TP cannot exceed GPUs per node"
-                
-            # # 4. 最大GPU数量限制
-            # if total_gpu > 32:
-            #     return False, "Total GPU count exceeds maximum (32)"
-                
-            return True, ""
-        
-        # 生成所有组合
-        combinations = []
-        for m, e, ns, gpn, tp_val in itertools.product(models, engines, node_size, gpu_per_node, tp_list):
-            valid, reason = is_valid(m, ns, gpn, tp_val)
-            if not valid:
-                # print(f"Skipping invalid config: model={m}, node_size={ns}, gpu_per_node={gpn}, tp={tp_val}. Reason: {reason}")
-                continue
-            
-            combinations.append({
-                "model": m,
-                "engine": e,
-                "node_size": ns,
-                "gpu_per_node": gpn,
-                "tp": tp_val
-            })
-        
-        # print(f"Generated {len(combinations)} valid test configurations")
-        
-        # 构建完整的测试配置
-        test_configs = []
-        for combo in combinations:
-            test_configs.append({
-                "deployment": {
-                    "model": combo["model"],
-                    "engine": combo["engine"],
-                    "node_size": combo["node_size"],
-                    "tp": combo["tp"],
-                    "dp": 1,
-                    "gpu_per_node": combo["gpu_per_node"],
-                    "replicas": 1,
-                    "shared_memory": "128Gi",
-                    "mem_fraction_static": 0.85,
-                    "host_path": combo["model"],
-                    "mount_path": "/work/models"
-                },
-                "test": {
-                    "model": combo["model"][7:],
-                    "tokenizer": combo["model"]
-                }
-            })
-        
-        # 输出JSON数组
-        print(json.dumps(test_configs))
-      env:
-        - name: MODELS
-          value: "{{workflow.parameters.models}}"
-        - name: ENGINES
-          value: "{{workflow.parameters.engines}}"
-        - name: NODE_SIZE
-          value: "{{workflow.parameters.node_size}}"
-        - name: GPU_PER_NODE
-          value: "{{workflow.parameters.gpu_per_node}}"
-        - name: TP
-          value: "{{workflow.parameters.tp}}"
 
   # 增强的测试循环模板 - 添加失败处理和重试
   - name: test-loop

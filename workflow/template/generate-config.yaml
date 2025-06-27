@@ -1,0 +1,103 @@
+---
+# 功能说明: 生成压力测试的参数组合
+# 参数说明:
+#   genrate-config 模板参数说明:
+#         moddels: 模型路径
+#         engines: 推理引擎
+#         node_size:  节点数量 
+#         gpu_per_node: 每节点gpu （实际上是resource requests 和 limits，每节点gpu使用数量由tp决定）
+#         tp: 张量并行
+#         ISL, OSL:  测试的输入/输出序列长度
+#         concurrency: 测试的请求并发数量
+# 详细说明:
+#   使用python将以上参数进行参数组合，最后以json的形式输出，请捕获std的内容。因为目前经常需要增减参数，因此暂时不包装成镜像
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterWorkflowTemplate
+metadata:
+  name: genrate-config
+spec:
+  entrypoint: genrate-config
+  templates:
+  - name: genrate-config
+    inputs:
+      parameters:
+      - name: models
+      - name: engines
+      - name: node_size
+      - name: gpu_per_node
+        default: 8
+      - name: tp
+    script:
+      image: python:3.9-slim
+      imagePullPolicy: Always
+      command: [python]
+      source: |
+        import json
+        import itertools
+        import os
+        # 从工作流参数获取配置
+        models = json.loads(os.environ.get('MODELS', '[]'))
+        engines = json.loads(os.environ.get('ENGINES', '[]'))
+        node_size = json.loads(os.environ.get('NODE_SIZE', '[]'))
+        gpu_per_node = json.loads(os.environ.get('GPU_PER_NODE', '[]'))
+        tp_list = json.loads(os.environ.get('TP', '[]'))
+        # 自定义函数：验证配置合法性
+        def is_valid(model, node_size, gpu_per_node, tp):
+            total_gpu = node_size * gpu_per_node
+            # 1. TP必须整除总GPU数
+            if total_gpu % tp != 0:
+                return False, "TP must divide total GPU count"
+            # 2. 特定模型的GPU数量要求
+            if "deepseek" in model.lower() and (total_gpu <= 8 or tp <= 8):
+                return False, "DeepSeek models require at least 8 GPUs"
+            return True, ""
+        # 生成所有组合
+        combinations = []
+        for m, e, ns, gpn, tp_val in itertools.product(models, engines, node_size, gpu_per_node, tp_list):
+            valid, reason = is_valid(m, ns, gpn, tp_val)
+            if not valid:
+                # print(f"Skipping invalid config: model={m}, node_size={ns}, gpu_per_node={gpn}, tp={tp_val}. Reason: {reason}")
+                continue
+            combinations.append({
+                "model": m,
+                "engine": e,
+                "node_size": ns,
+                "gpu_per_node": gpn,
+                "tp": tp_val
+            })        
+        # 构建完整的测试配置
+        test_configs = []
+        for combo in combinations:
+            test_configs.append({
+                "deployment": {
+                    "model": combo["model"],
+                    "engine": combo["engine"],
+                    "node_size": combo["node_size"],
+                    "tp": combo["tp"],
+                    "dp": 1,
+                    "gpu_per_node": combo["gpu_per_node"],
+                    "replicas": 1,
+                    "shared_memory": "128Gi",
+                    "mem_fraction_static": 0.85,
+                    "host_path": combo["model"],
+                    "mount_path": "/work/models"
+                },
+                "test": {
+                    "model": combo["model"][7:],
+                    "tokenizer": combo["model"]
+                }
+            })
+        # 输出JSON数组
+        print(json.dumps(test_configs))
+      env:
+        - name: MODELS
+          value: "{{inputs.parameters.models}}"
+        - name: ENGINES
+          value: "{{inputs.parameters.engines}}"
+        - name: NODE_SIZE
+          value: "{{inputs.parameters.node_size}}"
+        - name: GPU_PER_NODE
+          value: "{{inputs.parameters.gpu_per_node}}"
+        - name: TP
+          value: "{{inputs.parameters.tp}}"
+        - name: ISL
