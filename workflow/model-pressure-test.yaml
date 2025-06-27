@@ -100,7 +100,7 @@ spec:
       - name: shared-pvc
         mountPath: /shared-data
 
-  # 增强的测试循环模板 - 添加失败处理和重试
+  # 测试循环模板
   - name: test-loop
     inputs:
       parameters:
@@ -109,13 +109,21 @@ spec:
       limit: "{{workflow.parameters.max_retries}}"
       retryPolicy: "Always"
     steps:
-
     - - name: deploy-model
-        template: deploy-model
+        templateRef:
+          name: deploy-model
+          template: deploy-model
+          clusterScope: true
         arguments:
           parameters:
           - name: config
             value: "{{inputs.parameters.test_config}}"
+          - name: chart_path
+            value: "{{workflow.parameters.chart_path}}"
+          - name: model_timeout
+            value: "{{workflow.parameters.model_timeout}}"
+          - name: max_retries
+            value: "{{workflow.parameters.max_retries}}"
 
     - - name: wait-model-ready
         template: wait-model-ready
@@ -177,90 +185,9 @@ spec:
         when: "{{steps.deploy-model.outputs.parameters.status_code}} == false || 
                 {{steps.wait-model-ready.status}} == false || 
                 {{steps.monitor-test-job.status}} == false "
-          
 
 
-  # 模型部署模板 - 添加重试和超时处理
-  - name: deploy-model
-    inputs:
-      parameters:
-      - name: config
-    outputs:
-      parameters:
-      - name: release_name
-        valueFrom:
-          path: /tmp/release_name
-      - name: status_code
-        valueFrom:
-          path: /tmp/status_code
-    retryStrategy:
-      limit: "{{workflow.parameters.max_retries}}"
-      retryPolicy: "OnFailure"
-    container:
-      image: alpine/k8s:1.30.14
-      command: [sh, -c]
-      args:
-        - |
-          # 安装 jq (Alpine Linux)
-          # apk add --no-cache jq
-
-          # 解析配置参数
-          CONFIG='{{inputs.parameters.config}}'
-          MODEL=$(echo "$CONFIG" | jq -r '.deployment.model')
-          ENGINE=$(echo "$CONFIG" | jq -r '.deployment.engine')
-          NODE_SIZE=$(echo "$CONFIG" | jq -r '.deployment.node_size')
-          TP=$(echo "$CONFIG" | jq -r '.deployment.tp')
-          GPU=$(echo "$CONFIG" | jq -r '.deployment.gpu_per_node')
-          
-          # 生成唯一测试ID
-          ARGO_POD_NAME="{{pod.name}}"
-          TEST_ID="$ENGINE-${ARGO_POD_NAME: -20}"  # 截取后20个字符
-          echo $TEST_ID > /tmp/release_name
-          
-          # 记录开始时间
-          START_TIME=$(date +%s)
-          
-          # Helm部署命令
-          echo "Starting deployment for model: $MODEL with $NODE_SIZE nodes, $GPU GPUs per node, TP=$TP"
-          
-          set +e
-          helm install $TEST_ID "{{workflow.parameters.chart_path}}"/$ENGINE-deploy  \
-            --set nodeSize=$NODE_SIZE \
-            --set resourcesPerNode.gpu=$GPU \
-            --set llmConfig.tp=$TP \
-            --set llmConfig.dp=1 \
-            --set model.hostPath=$MODEL \
-            --set leaderWorkerSet.restartPolicy=RecreateGroupOnPodRestart \
-            --set restartPolicy=Always \
-            --timeout {{workflow.parameters.model_timeout}}s \
-            --atomic
-          
-          DEPLOY_EXIT_CODE=$?
-          set +e
-          
-          # 记录部署结果
-          END_TIME=$(date +%s)
-          DURATION=$((END_TIME - START_TIME))
-          
-          if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
-            echo "Deployment failed for model: $MODEL after $DURATION seconds"
-            # 记录失败信息
-            FAIL_DIR="/shared-data/failed-tests/{{workflow.name}}"
-            mkdir -p $FAIL_DIR
-            echo "$CONFIG" > $FAIL_DIR/$TEST_ID-failed.json
-            echo "Deployment failed after $DURATION seconds" >> $FAIL_DIR/$TEST_ID-failed.json
-            echo "----------------------------"
-            echo "false" > /tmp/status_code
-          else
-            echo "Successfully deployed model: $MODEL in $DURATION seconds"
-            echo "----------------------------"
-            echo "success" > /tmp/status_code
-          fi
-      volumeMounts:
-      - name: shared-pvc
-        mountPath: /shared-data
-
-  # 等待模型就绪 - 添加更严格的健康检查
+  # 等待模型就绪
   - name: wait-model-ready
     inputs:
       parameters:
