@@ -9,20 +9,23 @@ spec:
   volumes:
   - name: shared-pvc
     persistentVolumeClaim:
-      claimName: shared-pvc  # 使用已存在的PVC
+      claimName: shared-pvc  # 保存 reports
+  - name: model-pvc-map
+    configMap:
+      name: model-pvc-config  # 提供模型到pvc的映射关系
 
   arguments:
     parameters:
     - name: models
-      value: '["/path/to/Qwen/Qwen3-32B", "/path/to/deepseek-ai/DeepSeek-R1-0528"]'  # , "/path/to/deepseek-ai/DeepSeek-R1-0528"
+      value: '["Qwen/Qwen3-32B"]'
     - name: engines
       value: '["sglang"]'
     - name: node_size
-      value: '[1, 2, 3, 4]'  # '[1, 2, 4]'
+      value: '[1, 2, 3, 4]'
     - name: gpu_per_node
       value: '[8]' # '[2, 4, 8]'
     - name: tp
-      value: '[4, 8, 16, 32]' # '[4, 8, 16, 32]'
+      value: '[8, 16, 32]'
     - name: chart_path
       value: "/shared-data/helm-chart"
     - name: model_timeout
@@ -36,8 +39,7 @@ spec:
     - name: OSL
       value: "(500 1000 1000)"
     - name: concurrency
-      value: "1 4 16 32 64 128"  # 没启用
-    
+      value: "1 4 16 32 64 128"  # 未启用
 
   parallelism: 1
   templates:

@@ -65,12 +65,14 @@ spec:
         - |
           # 解析配置参数
           CONFIG='{{inputs.parameters.config}}'
-          MODEL=$(echo "$CONFIG" | jq -r '.deployment.model')
+          MODEL_PATH=$(echo "$CONFIG" | jq -r '.deployment.model')
+          MODEL_NAME=$(basename "$MODEL_PATH")  
           ENGINE=$(echo "$CONFIG" | jq -r '.deployment.engine')
           NODE_SIZE=$(echo "$CONFIG" | jq -r '.deployment.node_size')
           TP=$(echo "$CONFIG" | jq -r '.deployment.tp')
           GPU=$(echo "$CONFIG" | jq -r '.deployment.gpu_per_node')
-          
+          PVC_NAME=$(cat /etc/config/model-pvc-map/$MODEL_NAME)
+
           # 生成唯一测试ID
           ARGO_POD_NAME="{{pod.name}}"
           TEST_ID="$ENGINE-${ARGO_POD_NAME: -20}"  # 截取后20个字符
@@ -80,25 +82,26 @@ spec:
           START_TIME=$(date +%s)
           
           # Helm部署命令
-          echo "[Deploy-Model] Starting deployment: $MODEL"
+          echo "[Deploy-Model] Starting deployment: $MODEL_NAME"
           echo "  Engine: $ENGINE, Nodes: $NODE_SIZE, GPUs/node: $GPU, TP: $TP"
           echo "  Chart path: {{inputs.parameters.chart_path}}/$ENGINE-deploy"
           echo "  Timeout: {{inputs.parameters.model_timeout}}s"
           
           set +e
+          set -x
           helm install $TEST_ID "{{inputs.parameters.chart_path}}"/$ENGINE-deploy  \
             --set nodeSize=$NODE_SIZE \
             --set resourcesPerNode.gpu=$GPU \
             --set llmConfig.tp=$TP \
             --set llmConfig.dp=1 \
-            --set model.hostPath=$MODEL \
             --set leaderWorkerSet.restartPolicy=RecreateGroupOnPodRestart \
             --set restartPolicy=Always \
+            --set model.pvcName=$PVC_NAME \
+            --set model.modelPath=$MODEL_PATH \
             --timeout {{inputs.parameters.model_timeout}}s \
             --atomic
           
           DEPLOY_EXIT_CODE=$?
-          set +e
           
           # 记录部署结果
           END_TIME=$(date +%s)
@@ -121,3 +124,5 @@ spec:
       volumeMounts:
       - name: shared-pvc
         mountPath: /shared-data
+      - name: model-pvc-map
+        mountPath: /etc/config/model-pvc-map

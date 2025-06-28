@@ -71,6 +71,7 @@ spec:
           TEST_TIMEOUT="{{inputs.parameters.test_timeout}}"
           HELM_CHART_PATH="{{inputs.parameters.helm_chart_path}}"
           RELEASE_NAME="{{inputs.parameters.release_name}}-test"
+          PVC_NAME=$(cat /etc/config/model-pvc-map/$MODEL_NAME)
           
           # 记录开始时间
           START_TIME=$(date +%s)
@@ -94,13 +95,14 @@ spec:
           
           set -x
           helm install "$RELEASE_NAME" "$HELM_CHART_PATH" \
-            --set config.model="$MODEL_NAME" \
-            --set config.outputPath="$REPORT_DIR" \
-            --set tokenizer.hostPath="$TOKENIZER" \
+            --set config.model=$MODEL_NAME \
+            --set config.outputPath=$REPORT_DIR \
             --set serviceInfo.name="$SERVICE_NAME" \
             --set serviceInfo.attempts=10 \
-            --set config.ISL="$ISL" \
-            --set config.OSL="$OSL" \
+            --set config.ISL=$ISL \
+            --set config.OSL=$OSL \
+            --set tokenizer.pvcName=$PVC_NAME \
+            --set tokenizer.tokenizerPath=$MODEL_PATH \
             --namespace "{{inputs.parameters.namespace}}" \
             --timeout "${TEST_TIMEOUT}s" \
             --wait 
@@ -128,3 +130,5 @@ spec:
       volumeMounts:
       - name: shared-pvc
         mountPath: /shared-data
+      - name: model-pvc-map
+        mountPath: /etc/config/model-pvc-map

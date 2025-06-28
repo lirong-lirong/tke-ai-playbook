@@ -3,18 +3,19 @@ leaderWorkerSet:
   replicas: 1
   restartPolicy: RecreateGroupOnPodRestart
 
-# restartPolicy: Always # POD重启策略
+restartPolicy: Always
 
 # 镜像配置
 image:
-  repository: lmsysorg/sglang
-  tag: latest
+  repository: ccr.ccs.tencentyun.com/tke-ai-playbook/sglang # or lmsysorg/sglang  :latest
+  tag: nightly
   pullPolicy: IfNotPresent
 
 # 模型配置
 model:
-  hostPath: "/data/models"  # 主机模型路径
-  mountPath: "/work/models" # 容器挂载路径
+  pvcName: "default-model-pvc"
+  mountPath: "/work/models"
+  modelPath: ""
 
 # 节点
 nodeSize: 2
@@ -31,7 +32,7 @@ resourcesPerNode:
 # SGLang 服务器配置
 llmConfig:
   # 通用参数
-  memFractionStatic: 0.85   # 显存最高占用
+  memFractionStatic: 0.85   # 显存预留比例
   tp: 8
   trustRemoteCode: true
   dpAttantion: #--enable-dp-attention  # only for deepseek https://lmsys.org/blog/2024-12-04-sglang-v0-4/#data-parallelism-attention-for-deepseek-models
@@ -74,7 +75,7 @@ service:
 
 commandStr: |
   python3 -m sglang.launch_server \
-    --model-path {{ .Values.model.mountPath }} \
+    --model-path {{ .Values.model.mountPath }}/{{ .Values.model.modelPath}} \
     --mem-fraction-static "{{ .Values.llmConfig.memFractionStatic }}" \
     --tp "{{ .Values.llmConfig.tp }}" \
     --dist-init-addr $(LWS_LEADER_ADDRESS):{{ .Values.llmConfig.distInitPort }} \
@@ -108,8 +109,8 @@ volumes: |
       medium: Memory
       sizeLimit: {{ .Values.resourcesPerNode.sharedMemory }}
   - name: model
-    hostPath:
-      path: {{ .Values.model.hostPath }}
+    persistentVolumeClaim:
+      claimName: {{ .Values.model.pvcName }}
   - name: ib
     hostPath:
       path: /dev/infiniband
@@ -169,7 +170,7 @@ livenessProbeStr: |
     path: /health
     port: {{ .Values.llmConfig.leader.port }}
   initialDelaySeconds: 20
-  failureThreshold: 5  # 5次
+  failureThreshold: 30
   periodSeconds: 30
   timeoutSeconds: 5
 
@@ -178,7 +179,7 @@ readinessProbeStr: |
     path: /health
     port: {{ .Values.llmConfig.leader.port }}
   initialDelaySeconds: 20
-  failureThreshold: 30  # 30次
+  failureThreshold: 40
   periodSeconds: 30
   timeoutSeconds: 5
 
