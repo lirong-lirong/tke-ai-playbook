@@ -13,19 +13,12 @@ spec:
   - name: model-pvc-map
     configMap:
       name: model-pvc-config  # 提供模型到pvc的映射关系
+  - name: test-parameters-config # 定义测试参数
+    configMap:
+      name: test-parameters-config
 
   arguments:
     parameters:
-    - name: models
-      value: '["Qwen/Qwen3-32B"]'
-    - name: engines
-      value: '["sglang"]'
-    - name: node_size
-      value: '[1, 2, 3, 4]'
-    - name: gpu_per_node
-      value: '[8]' # '[2, 4, 8]'
-    - name: tp
-      value: '[8, 16, 32]'
     - name: chart_path
       value: "/shared-data/helm-chart"
     - name: model_timeout
@@ -34,12 +27,6 @@ spec:
       value: "7200"  # 测试超时时间（秒）
     - name: max_retries
       value: "1"  # 最大重试次数
-    - name: ISL
-      value: "(3000 1000 500)"
-    - name: OSL
-      value: "(500 1000 1000)"
-    - name: concurrency
-      value: "1 4 16 32 64 128"  # 未启用
 
   parallelism: 1
   templates:
@@ -52,18 +39,6 @@ spec:
           name: genrate-config
           template: genrate-config
           clusterScope: true
-        arguments:
-          parameters:
-          - name: models
-            value: "{{workflow.parameters.models}}"
-          - name: engines
-            value: "{{workflow.parameters.engines}}"
-          - name: node_size
-            value: "{{workflow.parameters.node_size}}"
-          - name: gpu_per_node
-            value: "{{workflow.parameters.gpu_per_node}}"
-          - name: tp
-            value: "{{workflow.parameters.tp}}"
     - - name: run-all-tests
         template: test-loop
         arguments:
@@ -160,12 +135,6 @@ spec:
             value: "{{steps.deploy-model.outputs.parameters.release_name}}"
           - name: pre_status
             value: "{{steps.wait-model-ready.outputs.parameters.status_code}}"
-          - name: ISL
-            value: "{{workflow.parameters.ISL}}"
-          - name: OSL
-            value: "{{workflow.parameters.OSL}}"
-          - name: concurrency
-            value: "{{workflow.parameters.concurrency}}"
           - name: test_timeout
             value: "{{workflow.parameters.test_timeout}}"
           - name: helm_chart_path

@@ -9,9 +9,6 @@ spec:
     - name: config
     - name: release_name
     - name: pre_status
-    - name: ISL
-    - name: OSL
-    - name: concurrency
     - name: test_timeout
     - name: helm_chart_path
       default: "/shared-data/helm-chart/vllm-benchmark"
@@ -26,9 +23,6 @@ spec:
       - name: config
       - name: release_name
       - name: pre_status
-      - name: ISL
-      - name: OSL
-      - name: concurrency
       - name: test_timeout
       - name: helm_chart_path
       - name: workflow_name
@@ -65,13 +59,15 @@ spec:
           GPU=$(echo "$CONFIG" | jq -r '.deployment.gpu_per_node')
           NODE_SIZE=$(echo "$CONFIG" | jq -r '.deployment.node_size')
           TP=$(echo "$CONFIG" | jq -r '.deployment.tp')
-          ISL="{{inputs.parameters.ISL}}"
-          OSL="{{inputs.parameters.OSL}}"
-          CONCURRENCY="{{inputs.parameters.concurrency}}"
           TEST_TIMEOUT="{{inputs.parameters.test_timeout}}"
+
           HELM_CHART_PATH="{{inputs.parameters.helm_chart_path}}"
           RELEASE_NAME="{{inputs.parameters.release_name}}-test"
+
           PVC_NAME=$(cat /etc/config/model-pvc-map/$MODEL_NAME)
+          ISL=$(cat /etc/test-parameters/ISL)
+          OSL=$(cat /etc/test-parameters/OSL)
+          CONCURRENCY=$(cat /etc/test-parameters/concurrency)
           
           # 记录开始时间
           START_TIME=$(date +%s)
@@ -95,14 +91,14 @@ spec:
           
           set -x
           helm install "$RELEASE_NAME" "$HELM_CHART_PATH" \
-            --set config.model=$MODEL_NAME \
-            --set config.outputPath=$REPORT_DIR \
+            --set config.model="$MODEL_NAME" \
+            --set config.outputPath="$REPORT_DIR" \
             --set serviceInfo.name="$SERVICE_NAME" \
             --set serviceInfo.attempts=10 \
-            --set config.ISL=$ISL \
-            --set config.OSL=$OSL \
+            --set config.ISL="$ISL" \
+            --set config.OSL="$OSL" \
             --set tokenizer.pvcName=$PVC_NAME \
-            --set tokenizer.tokenizerPath=$MODEL_PATH \
+            --set tokenizer.tokenizerPath="$MODEL_PATH" \
             --namespace "{{inputs.parameters.namespace}}" \
             --timeout "${TEST_TIMEOUT}s" \
             --wait 
@@ -132,3 +128,5 @@ spec:
         mountPath: /shared-data
       - name: model-pvc-map
         mountPath: /etc/config/model-pvc-map
+      - name: test-parameters-config
+        mountPath: /etc/test-parameters
