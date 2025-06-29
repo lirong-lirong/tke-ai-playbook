@@ -12,3 +12,7 @@ data:
   ISL: "(3000 1000 500)"
   OSL: "(500 1000 1000)"
   concurrency: "1 4 16 32 64 128"
+  # 自定义数据集相关的配置 
+  useCustomDataset: "false" # "true" or "false" 
+  customDatasetPath: "data.jsonl" # 数据集在独立PVC上的完整路径
+  customDatasetPvcName: "custom-dataset-pvc" # 独立数据集PVC的名称

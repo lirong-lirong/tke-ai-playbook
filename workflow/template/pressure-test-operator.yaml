@@ -68,6 +68,11 @@ spec:
           ISL=$(cat /etc/test-parameters/ISL)
           OSL=$(cat /etc/test-parameters/OSL)
           CONCURRENCY=$(cat /etc/test-parameters/concurrency)
+
+          # --- 从 ConfigMap 文件中读取自定义数据集开关、路径和PVC名称 ---
+          USE_CUSTOM_DATASET=$(cat /etc/test-parameters/useCustomDataset)
+          CUSTOM_DATASET_FILE_PATH=$(cat /etc/test-parameters/customDatasetPath)
+          CUSTOM_DATASET_PVC_NAME=$(cat /etc/test-parameters/customDatasetPvcName) # 读取PVC名称
           
           # 记录开始时间
           START_TIME=$(date +%s)
@@ -99,6 +104,10 @@ spec:
             --set config.OSL="$OSL" \
             --set tokenizer.pvcName=$PVC_NAME \
             --set tokenizer.tokenizerPath="$MODEL_PATH" \
+            --set config.dataSet=random \
+            --set config.useCustomDataset=$USE_CUSTOM_DATASET \
+            --set config.customDatasetPath=$CUSTOM_DATASET_FILE_PATH \
+            --set config.customDatasetPvcName=$CUSTOM_DATASET_PVC_NAME \
             --namespace "{{inputs.parameters.namespace}}" \
             --timeout "${TEST_TIMEOUT}s" \
             --wait 

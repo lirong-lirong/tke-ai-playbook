@@ -1,4 +1,4 @@
-image: ccr.ccs.tencentyun.com/tke-ai-playbook/llmbench:nightly
+image: ccr.ccs.tencentyun.com/tke-ai-playbook/vllm-openai:nightly
 restartPolicy: Never
 # llm服务信息
 serviceInfo:
@@ -15,10 +15,11 @@ config:
   concurrency: 64 # --max-concurrency
   outputPath: /share/     # --output-file Output JSONL file name.
   dataSet: random # --dataset-path
-  sharegptOutputLen:     # --sharegpt-output-len
-  sharegptContextLen: # --sharegpt-context-len The context length of the model for the ShareGPT dataset. Requests longer than the context length will be dropped. 
-  randomInputLenList: (500 1000 3000) # --random-input-len
-  randomOutputLenList: (1000 1000 150) # --random-output-len
+  ISL: (500 1000 3000)
+  OSL: (1000 1000 150)
+  useCustomDataset: false # 使用自定义数据集
+  customDatasetPath: "/path/my_custom_dataset.jsonl" # 自定义数据集在pvc内的路径
+  customDatasetPvcName: "my-custom-data-pvc" # 本地数据集PVC的名称
 
 tokenizer:
   pvcName: "default-model-pvc"
@@ -31,8 +32,14 @@ commandStr: |
   export BACHEND={{ .Values.config.serviceBackend }}
   export DATASET={{ .Values.config.dataSet }}
   export PROMPTS={{ .Values.config.numPrompts }}
+  export CUSTOM_DATASET_PATH={{ .Values.config.customDatasetPath }}
   mkdir -p {{ .Values.config.outputPath }}
-  max_attempts={{ .Values.serviceInfo.attempts }} 
+  max_attempts={{ .Values.serviceInfo.attempts }}
+  {{- if .Values.config.useCustomDataset }}
+  export DATASET="custom"
+  {{- end }}
+  export MODEL={{ .Values.config.model }}
+  export TOKENIZER={{ .Values.tokenizer.mountPath }}/{{ .Values.tokenizer.tokenizerPath }}
   attempt=0
   until curl -sf http://${HOST}:${PORT}/health; do
     attempt=$((attempt+1))
@@ -43,10 +50,8 @@ commandStr: |
     sleep 10
   done
   sleep 10;
-  export MODEL={{ .Values.config.model }}
-  export TOKENIZER={{ .Values.tokenizer.mountPath }}/{{ .Values.tokenizer.tokenizerPath }}
-  declare -a isl_list={{ .Values.config.randomInputLenList }}
-  declare -a osl_list={{ .Values.config.randomOutputLenList }}
+  declare -a isl_list={{ .Values.config.ISL }}
+  declare -a osl_list={{ .Values.config.OSL }}
   for i in "${!isl_list[@]}"; do
       # for j in "${!osl_list[@]}"; do
         ISL=${isl_list[$i]}
@@ -62,15 +67,20 @@ commandStr: |
         for loop in {1..${BENCH_LOOP}}; do
           for concurrency in 128 64 32 16 8 4 1; do
               set -x
-              uv run python3 vllm-benchmarks/benchmark_serving.py \
+              python3 benchmarks/benchmark_serving.py \
                   --backend ${BACHEND} \
                   --model ${TOKENIZER} \
                   --served-model-name ${MODEL} \
                   --host ${HOST} --port ${PORT} \
                   --endpoint /v1/chat/completions \
                   --dataset-name ${DATASET} \
-                  --random_input_len ${ISL} \
-                  --random_output_len ${OSL} \
+                  {{- if eq .Values.config.useCustomDataset true }}
+                  --dataset-path /custom-datasets/${CUSTOM_DATASET_PATH} \
+                  --custom-output-len ${OSL} \
+                  {{- else }}
+                  --random-input-len ${ISL} \
+                  --random-output-len ${OSL} \
+                  {{- end }}
                   --max-concurrency ${concurrency} \
                   --num-prompts $((${concurrency}*5)) \
                   --save-result --result-filename ${OUTPUT_RESULT_FILE}_c${concurrency}.json \
@@ -99,4 +109,27 @@ volumes: |
     persistentVolumeClaim:
       claimName: {{ .Values.tokenizer.pvcName }}
 
-resources:
+volumeMounts: | 
+  - name: shared-pvc
+    mountPath: /shared-data
+  - name: tokenizer
+    mountPath: /work/models #{{ .Values.tokenizer.mountPath }}
+  {{- if .Values.config.useCustomDataset }}
+  - name: custom-dataset-volume
+    mountPath: /custom-datasets
+  {{- end }}
+
+volumes: |
+  - name: shared-pvc
+    persistentVolumeClaim:
+      claimName: shared-pvc
+  - name: tokenizer
+    persistentVolumeClaim:
+      claimName: {{ .Values.tokenizer.pvcName }}
+  {{- if .Values.config.useCustomDataset }}
+  - name: custom-dataset-volume
+    persistentVolumeClaim:
+      claimName: {{ .Values.config.customDatasetPvcName }}
+  {{- end }}
+
+resources: {}
