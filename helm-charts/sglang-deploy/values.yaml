@@ -7,7 +7,7 @@ restartPolicy: Always
 
 # 镜像配置
 image:
-  repository: ccr.ccs.tencentyun.com/tke-ai-playbook/sglang # or lmsysorg/sglang  :latest
+  repository: ccr.ccs.tencentyun.com/tke-ai-playbook/sglang
   tag: nightly
   pullPolicy: IfNotPresent
 
@@ -26,39 +26,62 @@ resourcesPerNode:
   cpu: 0
   memory: 0
   # 共享内存配置
-  sharedMemory: 128G
+  sharedMemory: 256G
 
-
-# SGLang 服务器配置
+# SGLang 启动配置
 llmConfig:
   # 通用参数
   memFractionStatic: 0.85   # 显存预留比例
   tp: 8
   trustRemoteCode: true
-  dpAttantion: #--enable-dp-attention  # only for deepseek https://lmsys.org/blog/2024-12-04-sglang-v0-4/#data-parallelism-attention-for-deepseek-models
-  dp: 1
-  torchCompile: #--enable-torch-compile # 开启torch编译优化
+  dpAttantion: false # 设置为 true 或 false，用于控制 --enable-dp-attention
+  dp: 1 # 已被sglang弃用
+  torchCompile: false # 设置为 true 或 false，用于控制 --enable-torch-compile
   torchCompileMaxBs: 8      # 最大批量大小 
-  engineSpecificParams: {}  # 新增字段，用于存储引擎特定的参数
-
   # Leader 专用参数
   leader:
     port: 40000
-    
   # 网络配置（用于worker与leader通信）
   distInitPort: 20000
+  #deepseek
+  enableEpMoe: false # 设置为 true 或 false
+  enableDeepepMoe: false # 设置为 true 或 false
+  enableEplb: false      # ep负载均衡，设置为 true 或 false
+  ep: 1  # ep并行，对应 --ep-size 或相关参数
+  enableDpAttention: false # deepseek dp attention
 
+commandStr: |
+  python3 -m sglang.launch_server \
+    --model-path {{ .Values.model.mountPath }}/{{ .Values.model.modelPath}} \
+    --mem-fraction-static "{{ .Values.llmConfig.memFractionStatic }}" \
+    --tp "{{ .Values.llmConfig.tp }}" \
+    --dist-init-addr $(LWS_LEADER_ADDRESS):{{ .Values.llmConfig.distInitPort }} \
+    --nnodes $(LWS_GROUP_SIZE) \
+    --node-rank $(LWS_WORKER_INDEX) \
+    --trust-remote-code \
+    --host 0.0.0.0 \
+    --port "{{ .Values.llmConfig.leader.port }}" \
+    {{- if .Values.llmConfig.dpAttantion }}
+    --enable-dp-attention \
+    {{- end }}
+    {{- if .Values.llmConfig.torchCompile }}
+    --enable-torch-compile \
+    --torch-compile-max-bs "{{ .Values.llmConfig.torchCompileMaxBs }}" \
+    {{- end }}
+    {{- if .Values.llmConfig.dp }}
+    --dp "{{ .Values.llmConfig.dp }}" \
+    {{- end }}
+    {{- if .Values.llmConfig.enableEpMoe }}
+    --enable-ep-moe \
+    --ep-size "{{ .Values.llmConfig.ep }}" \
+    {{- end }}
+    {{- if .Values.llmConfig.enableDeepepMoe }}
+    --enable-deepep-moe \
+    {{- end }}
+    {{- if .Values.llmConfig.enableEplb }}
+    --enable-eplb \
+    {{- end }}
 
-# 环境变量
-env:
-  # NCCL/RDMA配置
-  ncclIBCudaSupport: 1
-  ncclIBDisable: 0
-  ncclIbGidIndex: 3
-  ncclSocketIfname: eth0
-  ncclDebug: INFO
-  # gloo
-  glooSocketIfname: eth0
 
 # 网络配置
 network:
@@ -74,24 +97,17 @@ service:
   port: 40000
   targetPort: 40000
 
-commandStr: |
-  python3 -m sglang.launch_server \
-    --model-path {{ .Values.model.mountPath }}/{{ .Values.model.modelPath}} \
-    --mem-fraction-static "{{ .Values.llmConfig.memFractionStatic }}" \
-    --tp "{{ .Values.llmConfig.tp }}" \
-    --dist-init-addr $(LWS_LEADER_ADDRESS):{{ .Values.llmConfig.distInitPort }} \
-    --nnodes $(LWS_GROUP_SIZE) \
-    --node-rank $(LWS_WORKER_INDEX) \
-    --trust-remote-code \
-    --host 0.0.0.0 \
-    --port "{{ .Values.llmConfig.leader.port }}" \
-    {{ .Values.llmConfig.dpAttantion }} \
-    {{ .Values.llmConfig.torchCompile }} \
-    --torch-compile-max-bs "{{ .Values.llmConfig.torchCompileMaxBs }}" \
-    --dp {{ .Values.llmConfig.dp }} \
-    {{- range $key, $value := .Values.llmConfig.engineSpecificParams }}
-    --{{ $key }} "{{ $value }}" \
-    {{- end }}
+
+# 环境变量
+env:
+  # NCCL/RDMA配置
+  ncclIBCudaSupport: 1
+  ncclIBDisable: 0
+  ncclIbGidIndex: 3
+  ncclSocketIfname: eth0
+  ncclDebug: INFO
+  # gloo
+  glooSocketIfname: eth0
 
 envStr: |
   - name: NCCL_IB_CUDA_SUPPORT
@@ -144,15 +160,6 @@ fullnameOverride: ""
 
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount: {}
-  # # Specifies whether a service account should be created
-  # create: false
-  # # Automatically mount a ServiceAccount's API credentials?
-  # automount: false
-  # # Annotations to add to the service account
-  # annotations: {}
-  # # The name of the service account to use.
-  # # If not set and create is true, a name is generated using the fullname template
-  # name: ""
 
 # This is for setting Kubernetes Annotations to a Pod.
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
@@ -173,8 +180,8 @@ livenessProbeStr: |
   httpGet:
     path: /health
     port: {{ .Values.llmConfig.leader.port }}
-  initialDelaySeconds: 20
-  failureThreshold: 30
+  initialDelaySeconds: 60
+  failureThreshold: 80
   periodSeconds: 30
   timeoutSeconds: 5
 
@@ -182,8 +189,8 @@ readinessProbeStr: |
   httpGet:
     path: /health
     port: {{ .Values.llmConfig.leader.port }}
-  initialDelaySeconds: 20
-  failureThreshold: 40
+  initialDelaySeconds: 60
+  failureThreshold: 80
   periodSeconds: 30
   timeoutSeconds: 5
 
