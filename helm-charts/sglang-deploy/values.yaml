@@ -39,7 +39,8 @@ llmConfig:
   dp: 1
   torchCompile: #--enable-torch-compile # 开启torch编译优化
   torchCompileMaxBs: 8      # 最大批量大小 
-  
+  engineSpecificParams: {}  # 新增字段，用于存储引擎特定的参数
+
   # Leader 专用参数
   leader:
     port: 40000
@@ -87,7 +88,10 @@ commandStr: |
     {{ .Values.llmConfig.dpAttantion }} \
     {{ .Values.llmConfig.torchCompile }} \
     --torch-compile-max-bs "{{ .Values.llmConfig.torchCompileMaxBs }}" \
-    --dp {{ .Values.llmConfig.dp }} 
+    --dp {{ .Values.llmConfig.dp }} \
+    {{- range $key, $value := .Values.llmConfig.engineSpecificParams }}
+    --{{ $key }} "{{ $value }}" \
+    {{- end }}
 
 envStr: |
   - name: NCCL_IB_CUDA_SUPPORT

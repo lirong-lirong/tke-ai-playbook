@@ -22,7 +22,7 @@ spec:
     - name: chart_path
       value: "/shared-data/helm-chart"
     - name: model_timeout
-      value: "900"  # 模型部署超时时间（秒）如果开启torch编译会更耗时
+      value: "3000"  # 模型部署超时时间（秒）如果开启torch编译会更耗时
     - name: test_timeout
       value: "7200"  # 测试超时时间（秒）
     - name: max_retries
@@ -262,7 +262,7 @@ spec:
 
           def parse_config_from_dirname(dirname):
               """从目录名解析模型配置信息"""
-              pattern = r'^(.*?)_([^_]+)_ns(\d+)_gpu(\d+)_tp(\d+)'
+              pattern = r'^(.*?)_([^_]+)_ns(\d+)_gpu(\d+)_tp(\d+)_ep(\d+)'
               match = re.match(pattern, dirname)
               
               if not match:
@@ -273,7 +273,8 @@ spec:
                   'engine': match.group(2),
                   'node_size': int(match.group(3)),
                   'gpu_per_node': int(match.group(4)),
-                  'tp': int(match.group(5))
+                  'tp': int(match.group(5)),
+                  'ep': int(match.group(6))
               }
 
           def parse_params_from_filename(filename):
@@ -336,7 +337,8 @@ spec:
                               "engine": config.get('engine', ''),
                               "node_size": config.get('node_size', 0),
                               "gpu_per_node": config.get('gpu_per_node', 0),
-                              "tp": config.get('tp', 0)
+                              "tp": config.get('tp', 0),
+                              "ep": config.get('ep', 0)
                           },
                           
                           # 测试配置

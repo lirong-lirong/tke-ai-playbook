@@ -59,6 +59,9 @@ spec:
           GPU=$(echo "$CONFIG" | jq -r '.deployment.gpu_per_node')
           NODE_SIZE=$(echo "$CONFIG" | jq -r '.deployment.node_size')
           TP=$(echo "$CONFIG" | jq -r '.deployment.tp')
+          EP=$(echo "$CONFIG" | jq -r '.deployment.ep')
+          DP_ATTENTION=$(echo "$CONFIG" | jq -r '.deployment.dp_attention')
+
           TEST_TIMEOUT="{{inputs.parameters.test_timeout}}"
 
           HELM_CHART_PATH="{{inputs.parameters.helm_chart_path}}"
@@ -84,7 +87,7 @@ spec:
             -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
           
           # 报告路径
-          REPORT_DIR="/shared-data/reports/{{inputs.parameters.workflow_name}}/${MODEL_NAME}_${ENGINE}_ns${NODE_SIZE}_gpu${GPU}_tp${TP}"
+          REPORT_DIR="/shared-data/reports/{{inputs.parameters.workflow_name}}/${MODEL_NAME}_${ENGINE}_ns${NODE_SIZE}_gpu${GPU}_tp${TP}_ep${EP}_dpAttention${DP_ATTENTION}"
           mkdir -p "$REPORT_DIR"
           echo "$REPORT_DIR" > /tmp/report_path
           

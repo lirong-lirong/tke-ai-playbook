@@ -34,34 +34,50 @@ spec:
         def read_param_from_configmap(param_name, default_value='[]'):
             file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, param_name)
             if os.path.exists(file_path):
-                with open(file_path, 'r') as f:
-                    return json.loads(f.read().strip())
-            return json.loads(default_value) # 将默认值作为解析后的 JSON 返回
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        # If content is empty, return default parsed JSON
+                        if not content:
+                            return json.loads(default_value)
+                        return json.loads(content)
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON from {file_path}: {e}. Returning default value.")
+                    return json.loads(default_value)
+                except Exception as e:
+                    print(f"Error reading {file_path}: {e}. Returning default value.")
+                    return json.loads(default_value)
+            return json.loads(default_value) # Return default value as parsed JSON
 
-        # 从 ConfigMap 挂载文件获取配置
+        # 从 ConfigMap 挂载文件获取配置        
         models = read_param_from_configmap('models')
         engines = read_param_from_configmap('engines')
         node_size = read_param_from_configmap('node_size')
-        gpu_per_node = read_param_from_configmap('gpu_per_node', '[8]') # 提供默认值
+        gpu_per_node = read_param_from_configmap('gpu_per_node', '[8]') # Provide default value
         tp_list = read_param_from_configmap('tp')
-        
+        ep_list = read_param_from_configmap('ep')
+        dp_attention_enable = read_param_from_configmap('dp_attention', '[]')
+
         # 自定义函数：验证配置合法性
-        def is_valid(model, node_size, gpu_per_node, tp):
+        def is_valid(model, node_size, gpu_per_node, tp, ep):
             total_gpu = node_size * gpu_per_node
             # 1. TP必须整除总GPU数
             if total_gpu % tp != 0:
                 return False, "TP must divide total GPU count"
             # 2. 特定模型的GPU数量要求
-            if "deepseek" in model.lower() and (total_gpu <= 8 or tp <= 8):
+            if "deepseek" in model.lower() and (total_gpu < 8 or tp < 8):
                 return False, "DeepSeek models require at least 8 GPUs"
+            # 3. 非MOE模型不开启EP并行
+            if "deepseek" not in model.lower() and (ep > 1):
+                return False, "Not Moe Model (EP parallelism > 1 is not allowed for non-DeepSeek models)"
             return True, ""
-        
+
         # 生成所有组合
         combinations = []
-        for m, e, ns, gpn, tp_val in itertools.product(
-            models, engines, node_size, gpu_per_node, tp_list
+        for m, e, ns, gpn, tp_val, ep_val in itertools.product(
+            models, engines, node_size, gpu_per_node, tp_list, ep_list
         ):
-            valid, reason = is_valid(m, ns, gpn, tp_val)
+            valid, reason = is_valid(m, ns, gpn, tp_val, ep_val)
             if not valid:
                 continue
             combinations.append({
@@ -70,10 +86,21 @@ spec:
                 "node_size": ns,
                 "gpu_per_node": gpn,
                 "tp": tp_val,
+                "ep": ep_val,
             }) 
 
         # 构建完整的测试配置
         test_configs = []
+        for combo in combinations:
+            # 非MOE模型不开启EP并行
+            is_deepseek = "deepseek" in combo["model"].lower()
+            if is_deepseek:
+                ep_enable_val = combo["ep"] > 1 
+                dp_attention_val = dp_attention_enable   
+            else:
+                ep_enable_val = False          # For non-DeepSeek models, ep_enable is False
+                dp_attention_val = False       # For non-DeepSeek models, dp_attention is False
+
         for combo in combinations:
             test_configs.append({
                 "deployment": {
@@ -82,12 +109,15 @@ spec:
                     "node_size": combo["node_size"],
                     "tp": combo["tp"],
                     "dp": 1,
+                    "ep": combo["ep"],
                     "gpu_per_node": combo["gpu_per_node"],
                     "replicas": 1,
-                    "shared_memory": "128Gi",
+                    "shared_memory": "256Gi",
                     "mem_fraction_static": 0.85,
                     "host_path": combo["model"],
-                    "mount_path": "/work/models"
+                    "mount_path": "/work/models",
+                    "ep_enable": ep_enable_val,
+                    "dp_attention": dp_attention_val
                 },
                 "test": {
                     "tokenizer": combo["model"],
