@@ -51,8 +51,6 @@ spec:
           name: consolidate-reports
           template: consolidate-reports
           clusterScope: true
-    # - - name: notify
-    #     template: notify
 
   # 准备PVC内容
   - name: prepare-pvc
@@ -123,7 +121,6 @@ spec:
             value: "{{steps.deploy-model.outputs.parameters.status_code}}"
           - name: namespace
             value: "{{workflow.namespace}}"
-        # when: "{{steps.deploy-model.outputs.parameters.status_code}} == true"
 
     - - name: run-pressure-test
         templateRef:
@@ -146,7 +143,6 @@ spec:
             value: "{{workflow.name}}"
           - name: namespace
             value: "{{workflow.namespace}}"
-        # when: "{{steps.wait-model-ready.outputs.parameters.status_code}} == true"
 
     # 监控测试Job状态
     - - name: monitor-test-job
@@ -238,52 +234,3 @@ spec:
       volumeMounts:
       - name: shared-pvc
         mountPath: /shared-data
-
-  # # 通知模板 - 添加失败信息
-  # - name: notify
-  #   container:
-  #     image: appropriate/curl:latest
-  #     command: [sh, -c]
-  #     args:
-  #       - |
-  #         # 读取汇总报告
-  #         SUMMARY_FILE="/shared-data/reports/{{workflow.name}}/summary/summary.json"
-  #         TOTAL_TESTS=$(jq -r '.total_tests' $SUMMARY_FILE)
-  #         SUCCESS_RATE=$(jq -r '.success_rate' $SUMMARY_FILE)
-  #         FAILED_COUNT=$(jq -r '.failed_tests | length' $SUMMARY_FILE)
-          
-  #         # 发送通知
-  #         curl -X POST https://hooks.slack.com/services/... \
-  #           -H 'Content-type: application/json' \
-  #           -d '{
-  #             "text": "压力测试完成: {{workflow.name}}",
-  #             "attachments": [
-  #               {
-  #                 "title": "测试概览",
-  #                 "fields": [
-  #                   {
-  #                     "title": "总测试数",
-  #                     "value": "'$TOTAL_TESTS'",
-  #                     "short": true
-  #                   },
-  #                   {
-  #                     "title": "成功率",
-  #                     "value": "'$SUCCESS_RATE'%",
-  #                     "short": true
-  #                   },
-  #                   {
-  #                     "title": "失败数",
-  #                     "value": "'$FAILED_COUNT'",
-  #                     "short": true
-  #                   }
-  #                 ]
-  #               },
-  #               {
-  #                 "title": "查看报告",
-  #                 "title_link": "https://report.example.com/{{workflow.name}}"
-  #               }
-  #             ]
-  #           }'
-  #     volumeMounts:
-  #     - name: shared-pvc
-  #       mountPath: /shared-data

@@ -83,10 +83,6 @@ spec:
           TEST_ID="$ENGINE-${ARGO_POD_NAME: -20}"  # 截取后20个字符
           echo "$TEST_ID" > /tmp/release_name # 修复：为echo的参数加上引号
           
-          # 记录开始时间
-          START_TIME=$(date +%s)
-          
-          # Helm部署命令
           echo "[Deploy-Model] Starting deployment: $MODEL_NAME"
           echo "  Engine: $ENGINE, Nodes: $NODE_SIZE, GPUs/node: $GPU, TP: $TP, EP: $EP, DP_ATTENTION: $DP_ATTENTION"
           echo "  Chart path: {{inputs.parameters.chart_path}}/$ENGINE-deploy"
@@ -120,26 +116,22 @@ spec:
           helm_args+=("--timeout" "{{inputs.parameters.model_timeout}}s")
           helm_args+=("--atomic")
           
-          # 直接执行命令数组，避免eval
           helm "${helm_args[@]}"
 
           DEPLOY_EXIT_CODE=$?
           
           # 记录部署结果
-          END_TIME=$(date +%s)
-          DURATION=$((END_TIME - START_TIME))
           
           if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
-            echo "Deployment failed for model: $MODEL_NAME after $DURATION seconds" # 修复：变量名MODEL改为MODEL_NAME
-            # 记录失败信息
+            echo "Deployment failed for model"
             FAIL_DIR="/shared-data/failed-tests/{{workflow.name}}"
-            mkdir -p "$FAIL_DIR" # 修复：为mkdir的参数加上引号
-            echo "$CONFIG" > "$FAIL_DIR/$TEST_ID-failed.json" # 修复：为echo的参数加上引号
-            echo "Deployment failed after $DURATION seconds" >> "$FAIL_DIR/$TEST_ID-failed.json" # 修复：为echo的参数加上引号
+            mkdir -p "$FAIL_DIR"
+            echo "$CONFIG" > "$FAIL_DIR/$TEST_ID-failed.json"
+            echo "Deployment failed after $DURATION seconds" >> "$FAIL_DIR/$TEST_ID-failed.json"
             echo "----------------------------"
             echo "false" > /tmp/status_code
           else
-            echo "Successfully deployed model: $MODEL_NAME in $DURATION seconds" # 修复：变量名MODEL改为MODEL_NAME
+            echo "Successfully deployed model: $MODEL_NAME
             echo "----------------------------"
             echo "success" > /tmp/status_code
           fi
