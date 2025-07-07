@@ -2,28 +2,7 @@
 # 功能说明: 部署模型
 # 参数说明:
 #   deploy-model 模板参数说明:
-#         config: 参数组合, json格式 ：
-#            {
-#              "deployment": {
-#                    "model": ,
-#                    "engine": ,
-#                    "node_size": ,
-#                    "tp": ,
-#                    "dp": ,
-#                    "gpu_per_node": ,
-#                    "replicas": ,
-#                    "shared_memory": "128Gi",
-#                    "mem_fraction_static": 0.85,
-#                    "host_path": ,
-#                    "mount_path": "",
-#                    "ep_enable": true/false, 
-#                    "dp_attention": true/false
-#                },
-#                "test": {
-#                    "model": ,
-#                    "tokenizer": 
-#                }
-#              }
+#
 # 输出:
 #   release_name:
 #   status_code:
@@ -65,6 +44,7 @@ spec:
       command: ["/bin/bash", -c]
       args:
         - |
+          echo "false" > /tmp/status_code
           # 解析配置参数
           CONFIG='{{inputs.parameters.config}}'
           MODEL_PATH=$(echo "$CONFIG" | jq -r '.deployment.model')
@@ -77,19 +57,18 @@ spec:
           EP=$(echo "$CONFIG" | jq -r '.deployment.ep')
           EP_ENABLE=$(echo "$CONFIG" | jq -r '.deployment.ep_enable')
           DP_ATTENTION=$(echo "$CONFIG" | jq -r '.deployment.dp_attention')
+          # NAME=$(echo "$CONFIG" | jq -r '.deployment.name')
 
           # 生成唯一测试ID
           ARGO_POD_NAME="{{pod.name}}"
           TEST_ID="$ENGINE-${ARGO_POD_NAME: -20}"  # 截取后20个字符
+          # TEST_ID=$NAME
           echo "$TEST_ID" > /tmp/release_name # 修复：为echo的参数加上引号
           
           echo "[Deploy-Model] Starting deployment: $MODEL_NAME"
           echo "  Engine: $ENGINE, Nodes: $NODE_SIZE, GPUs/node: $GPU, TP: $TP, EP: $EP, DP_ATTENTION: $DP_ATTENTION"
           echo "  Chart path: {{inputs.parameters.chart_path}}/$ENGINE-deploy"
           
-          set +e
-          set -x
-
           helm_args=(
             "install"
             "$TEST_ID"
@@ -116,6 +95,8 @@ spec:
           helm_args+=("--timeout" "{{inputs.parameters.model_timeout}}s")
           helm_args+=("--atomic")
           
+          set +e
+          set -x
           helm "${helm_args[@]}"
 
           DEPLOY_EXIT_CODE=$?
@@ -128,10 +109,10 @@ spec:
             mkdir -p "$FAIL_DIR"
             echo "$CONFIG" > "$FAIL_DIR/$TEST_ID-failed.json"
             echo "Deployment failed after $DURATION seconds" >> "$FAIL_DIR/$TEST_ID-failed.json"
-            echo "----------------------------"
-            echo "false" > /tmp/status_code
+            echo "----------------------------
+            echo "false" > /tmp/status_code"
           else
-            echo "Successfully deployed model: $MODEL_NAME
+            echo "Successfully deployed model: $MODEL_NAME"
             echo "----------------------------"
             echo "success" > /tmp/status_code
           fi

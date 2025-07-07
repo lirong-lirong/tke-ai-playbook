@@ -10,6 +10,9 @@ spec:
   - name: shared-pvc
     persistentVolumeClaim:
       claimName: shared-pvc  # 保存 reports
+  - name: dataset-pvc
+    persistentVolumeClaim:
+      claimName: custom-dataset-pvc
   - name: model-pvc-map
     configMap:
       name: model-pvc-config  # 提供模型到pvc的映射关系
@@ -26,7 +29,7 @@ spec:
     - name: test_timeout
       value: "7200"  # 测试超时时间（秒）
     - name: max_retries
-      value: "1"  # 最大重试次数
+      value: "0"  # 最大重试次数
 
   parallelism: 1
   templates:
@@ -129,38 +132,10 @@ spec:
           clusterScope: true
         arguments:
           parameters:
-          - name: config
+          - name: configs_json
             value: "{{inputs.parameters.test_config}}"
-          - name: release_name
-            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
           - name: pre_status
             value: "{{steps.wait-model-ready.outputs.parameters.status_code}}"
-          - name: test_timeout
-            value: "{{workflow.parameters.test_timeout}}"
-          - name: helm_chart_path
-            value: "/shared-data/helm-chart/vllm-benchmark"
-          - name: workflow_name
-            value: "{{workflow.name}}"
-          - name: namespace
-            value: "{{workflow.namespace}}"
-
-    # 监控测试Job状态
-    - - name: monitor-test-job
-        templateRef:
-          name: wait-resource-operator
-          template: wait-for-resource
-          clusterScope: true
-        arguments:
-          parameters:
-          - name: resource_type
-            value: "job"
-          - name: resource_name
-            value: "{{steps.deploy-model.outputs.parameters.release_name}}-test"
-          - name: timeout
-            value: "{{workflow.parameters.test_timeout}}"
-          - name: pre_status
-            value: "{{steps.run-pressure-test.outputs.parameters.status_code}}"
-        # when: "{{steps.run-pressure-test.outputs.parameters.status_code}} == true"
 
     - - name: cleanup
         templateRef:
@@ -189,8 +164,7 @@ spec:
           - name: error_reason
             value: "Deployment failed"
         when: "{{steps.deploy-model.outputs.parameters.status_code}} == false || 
-                {{steps.wait-model-ready.status}} == false || 
-                {{steps.monitor-test-job.status}} == false "
+                {{steps.wait-model-ready.status}} == false"
 
   # 处理失败情况
   - name: handle-failure

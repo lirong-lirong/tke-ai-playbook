@@ -57,9 +57,17 @@ spec:
         tp_list = read_param_from_configmap('tp')
         ep_list = read_param_from_configmap('ep')
         dp_attention_enable = read_param_from_configmap('dp_attention', '[]')
+        dp_list = read_param_from_configmap('dp')
+        test_isl = read_param_from_configmap('ISL')
+        test_osl = read_param_from_configmap('OSL')
+        test_dataset = read_param_from_configmap('dataset')
+        test_dataset_path = read_param_from_configmap('dataset_path')
+        test_eos = read_param_from_configmap('EOS') # 'true' or 'false'
+        test_service = read_param_from_configmap('service')
+        test_service_port = read_param_from_configmap('service_port')
 
         # 自定义函数：验证配置合法性
-        def is_valid(model, node_size, gpu_per_node, tp, ep):
+        def is_valid(model, node_size, gpu_per_node, tp, ep, dp):
             total_gpu = node_size * gpu_per_node
             # 1. TP必须整除总GPU数
             if total_gpu % tp != 0:
@@ -74,10 +82,10 @@ spec:
 
         # 生成所有组合
         combinations = []
-        for m, e, ns, gpn, tp_val, ep_val in itertools.product(
-            models, engines, node_size, gpu_per_node, tp_list, ep_list
+        for m, e, ns, gpn, tp_val, ep_val, dp_val in itertools.product(
+            models, engines, node_size, gpu_per_node, tp_list, ep_list, dp_list
         ):
-            valid, reason = is_valid(m, ns, gpn, tp_val, ep_val)
+            valid, reason = is_valid(m, ns, gpn, tp_val, ep_val, dp_val)
             if not valid:
                 continue
             combinations.append({
@@ -87,6 +95,7 @@ spec:
                 "gpu_per_node": gpn,
                 "tp": tp_val,
                 "ep": ep_val,
+                "dp": dp_val,
             }) 
 
         # 构建完整的测试配置
@@ -102,8 +111,12 @@ spec:
                 dp_attention_val = False       # For non-DeepSeek models, dp_attention is False
 
         for combo in combinations:
+            model_short_name = combo["model"].split('/')[-1]
+            deployment_name = f"{model_short_name}-{combo['engine']}-node{combo['node_size']}-tp{combo['tp']}-dp{combo['dp']}-isl{test_isl}-osl{test_osl}-eos{test_eos}".replace('.', '-').replace('/', '-')
+
             test_configs.append({
                 "deployment": {
+                    "name": deployment_name,
                     "model": combo["model"],
                     "engine": combo["engine"],
                     "node_size": combo["node_size"],
@@ -121,6 +134,13 @@ spec:
                 },
                 "test": {
                     "tokenizer": combo["model"],
+                    "ISL": int(test_isl),
+                    "OSL": int(test_osl),
+                    "dataset": test_dataset,
+                    "dataset_path": test_dataset_path,
+                    "EOS": True if test_eos  else False,
+                    "service": test_service,
+                    "service_port": int(test_service_port)
                 }
             })
         # 输出JSON数组

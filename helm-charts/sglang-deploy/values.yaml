@@ -28,6 +28,7 @@ resourcesPerNode:
   # 共享内存配置
   sharedMemory: 256G
 
+
 # SGLang 启动配置
 llmConfig:
   # 通用参数
@@ -35,7 +36,7 @@ llmConfig:
   tp: 8
   trustRemoteCode: true
   dpAttantion: false # 设置为 true 或 false，用于控制 --enable-dp-attention
-  dp: 1 # 已被sglang弃用
+  dp: 1 # 已被sglang弃用，但如果需要传递该参数，请确保其逻辑正确
   torchCompile: false # 设置为 true 或 false，用于控制 --enable-torch-compile
   torchCompileMaxBs: 8      # 最大批量大小 
   # Leader 专用参数
@@ -93,7 +94,7 @@ network:
 service:
   enabled: true
   name: llm-service-endpoint
-  type: ClusterIP
+  type: LoadBalancer
   port: 40000
   targetPort: 40000
 
@@ -152,28 +153,8 @@ ResourcesStr: |
     nvidia.com/gpu: "{{ .Values.resourcesPerNode.gpu }}"
     memory: "{{ .Values.resourcesPerNode.memory }}"
 
-# This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-imagePullSecrets: []
-# This is to override the chart name.
-nameOverride: ""
-fullnameOverride: ""
-
-# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
-serviceAccount: {}
-
-# This is for setting Kubernetes Annotations to a Pod.
-# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
-podAnnotations: {}
-# This is for setting Kubernetes Labels to a Pod.
-# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
-podLabels: {}
-
-podSecurityContext: {}
-  # fsGroup: 2000
-
 securityContext:
   privileged: true
-
 
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 livenessProbeStr: |
@@ -202,9 +183,3 @@ startupProbe: |
   failureThreshold: 30  # 30次
   periodSeconds: 30
   timeoutSeconds: 5
-
-nodeSelector: {}
-
-tolerations: []
-
-affinity: {}

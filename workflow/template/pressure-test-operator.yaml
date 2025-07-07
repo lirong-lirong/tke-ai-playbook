@@ -6,135 +6,115 @@ spec:
   entrypoint: pressure-test
   arguments:
     parameters:
-    - name: config
-    - name: release_name
     - name: pre_status
-    - name: test_timeout
-    - name: helm_chart_path
-      default: "/shared-data/helm-chart/vllm-benchmark"
-    - name: workflow_name
-    - name: namespace
-      default: "default"
+    - name: configs_json
   
   templates:
   - name: pressure-test
     inputs:
       parameters:
-      - name: config
-      - name: release_name
+      - name: configs_json
       - name: pre_status
-      - name: test_timeout
-      - name: helm_chart_path
-      - name: workflow_name
-      - name: namespace
     outputs:
       parameters:
       - name: status_code
         valueFrom:
           path: /tmp/status_code
-      - name: report_path
-        valueFrom:
-          path: /tmp/report_path
-    container:
-      image: alpine/k8s:1.30.14 
-      command: [sh, "-c"]
-      args:
-        - |
-          # 初始化状态
-          echo "false" > /tmp/status_code
-          echo "unknown" > /tmp/report_path
-          
-          # 跳过条件
-          if [ "{{inputs.parameters.pre_status}}" = "false" ]; then
-            echo "Skipping pressure test due to previous failure"
-            exit 0
-          fi
-          
-          # 解析测试参数
-          CONFIG='{{inputs.parameters.config}}'
-          MODEL_PATH=$(echo "$CONFIG" | jq -r '.deployment.model')
-          MODEL_NAME=$(basename "$MODEL_PATH")  
-          ENGINE=$(echo "$CONFIG" | jq -r '.deployment.engine')
-          TOKENIZER=$(echo "$CONFIG" | jq -r '.test.tokenizer')
-          GPU=$(echo "$CONFIG" | jq -r '.deployment.gpu_per_node')
-          NODE_SIZE=$(echo "$CONFIG" | jq -r '.deployment.node_size')
-          TP=$(echo "$CONFIG" | jq -r '.deployment.tp')
-          EP=$(echo "$CONFIG" | jq -r '.deployment.ep')
-          DP_ATTENTION=$(echo "$CONFIG" | jq -r '.deployment.dp_attention')
+      # - name: report_path
+      #   valueFrom:
+      #     path: /tmp/report_path
+    script:
+      image: fanjiankong-bj.tencentcloudcr.com/pengdrumli/evalscpoe-perf:v0.4
+      command: [python]
+      source: |
+        import os
+        import json
+        import sys
+        from evalscope.perf.main import run_perf_benchmark
+        from evalscope.perf.arguments import Arguments
 
-          TEST_TIMEOUT="{{inputs.parameters.test_timeout}}"
+        CONFIG_MAP_MODEL_PVC_PATH = "/etc/test-parameters"
+        def read_param_from_model_pvc_map(param_name, default_value=''):
+            file_path = os.path.join(CONFIG_MAP_MODEL_PVC_PATH, param_name)
+            if os.path.exists(file_path):
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        return content if content else default_value
+                except Exception as e:
+                    print(f"Error reading {file_path}: {e}. Returning default value.")
+                    return default_value
+            return default_value
+        
+        configs_json_str = '{{inputs.parameters.configs_json}}'
+        pre_status = "{{inputs.parameters.pre_status}}"
 
-          HELM_CHART_PATH="{{inputs.parameters.helm_chart_path}}"
-          RELEASE_NAME="{{inputs.parameters.release_name}}-test"
+        if pre_status.lower() == 'false':
+            print("pre_status 为 false，跳过性能测试。")
+            sys.exit(0) # 正常退出脚本，Argo Workflow 任务将完成
+        with open("/tmp/status_code", "w") as f:
+            f.write("false")
 
-          PVC_NAME=$(cat /etc/config/model-pvc-map/$MODEL_NAME)
-          ISL=$(cat /etc/test-parameters/ISL)
-          OSL=$(cat /etc/test-parameters/OSL)
-          CONCURRENCY=$(cat /etc/test-parameters/concurrency)
+        config = json.loads(configs_json_str)
+        deployment_cfg = config.get("deployment", {})
+        test_cfg = config.get("test", {})
 
-          # --- 从 ConfigMap 文件中读取自定义数据集开关、路径和PVC名称 ---
-          USE_CUSTOM_DATASET=$(cat /etc/test-parameters/useCustomDataset)
-          CUSTOM_DATASET_FILE_PATH=$(cat /etc/test-parameters/customDatasetPath)
-          CUSTOM_DATASET_PVC_NAME=$(cat /etc/test-parameters/customDatasetPvcName) # 读取PVC名称
-          
-          # 记录开始时间
-          START_TIME=$(date +%s)
-          
-          # 获取模型服务名称
-          SERVICE_NAME=$(kubectl get svc \
-            -l app.kubernetes.io/instance={{inputs.parameters.release_name}} \
-            -n {{inputs.parameters.namespace}} \
-            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-          
-          # 报告路径
-          REPORT_DIR="/shared-data/reports/{{inputs.parameters.workflow_name}}/${MODEL_NAME}_${ENGINE}_ns${NODE_SIZE}_gpu${GPU}_tp${TP}_ep${EP}_dpAttention${DP_ATTENTION}"
-          mkdir -p "$REPORT_DIR"
-          echo "$REPORT_DIR" > /tmp/report_path
-          
-          # 运行压力测试
-          echo "Starting pressure test for $MODEL_NAME-$ENGINE"
-          echo "  Service: $SERVICE_NAME"
-          echo "  Input Length: $ISL, Output Length: $OSL, Concurrency: $CONCURRENCY"
-          echo "  Timeout: ${TEST_TIMEOUT}s"
-          
-          set -x
-          helm install "$RELEASE_NAME" "$HELM_CHART_PATH" \
-            --set config.model="$MODEL_NAME" \
-            --set config.outputPath="$REPORT_DIR" \
-            --set serviceInfo.name="$SERVICE_NAME" \
-            --set serviceInfo.attempts=10 \
-            --set config.ISL="$ISL" \
-            --set config.OSL="$OSL" \
-            --set tokenizer.pvcName=$PVC_NAME \
-            --set tokenizer.tokenizerPath="$MODEL_PATH" \
-            --set config.dataSet=random \
-            --set config.useCustomDataset=$USE_CUSTOM_DATASET \
-            --set config.customDatasetPath=$CUSTOM_DATASET_FILE_PATH \
-            --set config.customDatasetPvcName=$CUSTOM_DATASET_PVC_NAME \
-            --namespace "{{inputs.parameters.namespace}}" \
-            --timeout "${TEST_TIMEOUT}s" \
-            --wait 
-          
-          HELM_EXIT_CODE=$?
-          set +x
-          
-          # 计算持续时间
-          END_TIME=$(date +%s)
-          DURATION=$((END_TIME - START_TIME))
-          
-          if [ $HELM_EXIT_CODE -ne 0 ]; then
-            echo "❌ Pressure test failed for $MODEL_NAME after ${DURATION}s"
-            # 记录失败信息
-            FAIL_DIR="/shared-data/failed-tests/{{inputs.parameters.workflow_name}}"
-            mkdir -p "$FAIL_DIR"
-            echo "$CONFIG" > "$FAIL_DIR/$TEST_ID-failed.json"
-            echo "Pressure test failed after ${DURATION}s" >> "$FAIL_DIR/$TEST_ID-failed.json"
-            echo "false" > /tmp/status_code
-          else
-            echo "✅ Successfully completed pressure test for $MODEL_NAME in ${DURATION}s"
-            echo "true" > /tmp/status_code
-          fi
-          echo "----------------------------------------"
+        name = deployment_cfg.get("name")
+        model = deployment_cfg.get("model", "default-model") # 使用部署模型
+        tokenizer = test_cfg.get("tokenizer", model) # 使用测试 tokenizer，如果没有则回退到部署模型
+        dataset = test_cfg.get("dataset", "random")
+        dataset_path = test_cfg.get("dataset_path", "")
+        isl = test_cfg.get("ISL")
+        osl = test_cfg.get("OSL")
+        eos = str(test_cfg.get("EOS", True)) # 确保它是字符串以便比较
+        service = test_cfg.get("service", "127.0.0.1")
+        service_port = test_cfg.get("service_port", 8801)
+
+        ignore_eos = True if eos.lower() == 'false' else False
+        url = f"http://{service}:{service_port}/v1/chat/completions"
+
+        swanlab_api_key = read_param_from_model_pvc_map('swanlab_api_key', default_value=os.getenv('SWANLAB_API_KEY', ''))
+        swanlab_host = read_param_from_model_pvc_map('swanlab_host', default_value=os.getenv('SWANLAB_HOST', ''))
+
+        # Initialize Arguments with common parameters
+        task_cfg_args = {
+            'parallel': [1, 10, 50, 100, 200],
+            'number': [10, 20, 100, 200, 400],
+            'model': model,
+            'url': url,
+            'api': 'openai',
+            'tokenizer_path': model,
+            'extra_args': {'ignore_eos': ignore_eos},
+            'swanlab_api_key': swanlab_api_key,
+            'swanlab_host': swanlab_host,
+            'name': name
+        }
+
+        if dataset == 'random':
+            # For random dataset, ISL corresponds to max_prompt_length and min_prompt_length
+            # OSL corresponds to min_tokens and max_tokens
+            # dataset_path is not used
+            task_cfg_args['dataset'] = 'random'
+            task_cfg_args['min_prompt_length'] = int(isl) - 20
+            task_cfg_args['max_prompt_length'] = int(isl) + 20
+            task_cfg_args['min_tokens'] = int(osl) - 20
+            task_cfg_args['max_tokens'] = int(osl) + 20# OSL applies to both min/max
+        elif dataset == 'custom':
+            # For custom dataset, dataset_path is used, and ISL is not applicable
+            task_cfg_args['dataset'] = 'custom'
+            task_cfg_args['dataset_path'] = '/dataset/' + dataset_path
+            # ISL related parameters (min_prompt_length, max_prompt_length) are not set
+            # min_tokens and max_tokens still apply for response generation
+            task_cfg_args['min_tokens'] = int(osl) - 20
+            task_cfg_args['max_tokens'] = int(osl) + 20
+        else:
+            raise ValueError(f"Unsupported dataset type: {dataset}. Must be 'random' or 'custom'.")
+
+        task_cfg = Arguments(**task_cfg_args)
+        results = run_perf_benchmark(task_cfg)
+        with open("/tmp/status_code", "w") as f:
+            f.write("true")
+
       volumeMounts:
       - name: shared-pvc
         mountPath: /shared-data
@@ -142,3 +122,5 @@ spec:
         mountPath: /etc/config/model-pvc-map
       - name: test-parameters-config
         mountPath: /etc/test-parameters
+      - name: dataset-pvc
+        mountPath: /dataset
