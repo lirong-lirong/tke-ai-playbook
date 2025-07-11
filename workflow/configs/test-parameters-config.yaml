@@ -4,16 +4,15 @@ metadata:
   name: test-parameters-config
   namespace: default # 确保与工作流命名空间一致
 data:
-  models: '["Qwen/Qwen3-32B"]' # , "deepseek-ai/DeepSeek-V3-0324", "deepseek-ai/DeepSeek-R1-0528"
+  models: '["deepseek-ai/DeepSeek-V3-0324"]' # "Qwen/Qwen3-32B", "deepseek-ai/DeepSeek-V3-0324", "deepseek-ai/DeepSeek-R1-0528"
   engines: '["sglang"]' # , "vllm"
-  node_size: '[1]'
+  node_size: '[2]'
   gpu_per_node: '[8]' 
-  tp: '[8]'
+  tp: '[16]'
   ISL: '0'
-  OSL: '250'
+  OSL: '500'
   concurrency: '"1 4 16 32 64 128"'
-  MOE: 'true'
-  ep: '[2, 4, 8, 16, 1]'
+  ep_enable: '[false, true]'
   dp: '[1]'
   dp_attention: 'false'
   EOS: 'true'
@@ -24,8 +23,13 @@ data:
 
   # 注意：这里的值是纯字符串，不是JSON。
   # 因为这些值是直接读取文件内容，所以不需要额外的JSON解析
-  swanlab_api_key: "your-swanlab_api_key"
-  swanlab_host: "http://your-swanlab_host:8000"
+
+  db_host: "129.226.53.35"
+  db_port: 3306
+  db_name: "evalscope_db"
+  db_user: "evalscope_user"
+  db_password: "evalscope_pass"
+
   useCustomDataset: 'true'
   customDatasetPath: "agent-format.jsonl" # 数据集在独立PVC上的完整路径
   customDatasetPvcName: "custom-dataset-pvc" # 独立数据集PVC的名称

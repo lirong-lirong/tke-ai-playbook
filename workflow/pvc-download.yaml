@@ -7,9 +7,9 @@ spec:
   template:
     spec:
       volumes:
-      - name: shared-pvc
+      - name: charts-pvc
         persistentVolumeClaim:
-          claimName: shared-pvc  # 使用现有的PVC
+          claimName: charts-pvc  # 使用现有的PVC
       - name: node-destination
         hostPath:
           path: /path/to/download  # 替换为目标节点目录
@@ -45,7 +45,7 @@ spec:
             
             echo "操作成功完成"
         volumeMounts:
-        - name: shared-pvc
+        - name: charts-pvc
           mountPath: /pvc-data  # PVC挂载点
         - name: node-destination
           mountPath: /node-dest  # 节点目录挂载点

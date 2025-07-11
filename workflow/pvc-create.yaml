@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: shared-pvc
+  name: charts-pvc
   namespace: default
 spec:
   accessModes:
@@ -21,9 +21,9 @@ spec:
   template:
     spec:
       volumes:
-      - name: shared-pvc
+      - name: charts-pvc
         persistentVolumeClaim:
-          claimName: shared-pvc
+          claimName: charts-pvc
       # 添加hostPath卷访问节点文件系统
       - name: node-data
         hostPath:
@@ -53,7 +53,7 @@ spec:
             
             echo "PVC初始化完成"
         volumeMounts:
-        - name: shared-pvc
+        - name: charts-pvc
           mountPath: /shared-data
         # 挂载hostPath卷
         - name: node-data

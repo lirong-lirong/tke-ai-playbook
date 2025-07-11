@@ -9,7 +9,7 @@ spec:
   volumes:
   - name: shared-pvc
     persistentVolumeClaim:
-      claimName: shared-pvc  # 保存 reports
+      claimName: charts-pvc  # 保存 helm chart 
   - name: dataset-pvc
     persistentVolumeClaim:
       claimName: custom-dataset-pvc
@@ -25,7 +25,7 @@ spec:
     - name: chart_path
       value: "/shared-data/helm-chart"
     - name: model_timeout
-      value: "3000"  # 模型部署超时时间（秒）如果开启torch编译会更耗时
+      value: "1800"  # 模型部署超时时间（秒）如果开启torch编译会更耗时
     - name: test_timeout
       value: "7200"  # 测试超时时间（秒）
     - name: max_retries
@@ -49,11 +49,11 @@ spec:
           - name: test_config
             value: "{{item}}"
         withParam: "{{steps.generate-test-matrix.outputs.result}}"
-    - - name: consolidate-reports
-        templateRef:
-          name: consolidate-reports
-          template: consolidate-reports
-          clusterScope: true
+    # - - name: consolidate-reports
+    #     templateRef:
+    #       name: consolidate-reports
+    #       template: consolidate-reports
+    #       clusterScope: true
 
   # 准备PVC内容
   - name: prepare-pvc
@@ -137,6 +137,24 @@ spec:
           - name: pre_status
             value: "{{steps.wait-model-ready.outputs.parameters.status_code}}"
 
+    # # 监控测试Job状态
+    # - - name: monitor-test-job
+    #     templateRef:
+    #       name: wait-resource-operator
+    #       template: wait-for-resource
+    #       clusterScope: true
+    #     arguments:
+    #       parameters:
+    #       - name: resource_type
+    #         value: "job"
+    #       - name: resource_name
+    #         value: "{{steps.deploy-model.outputs.parameters.release_name}}-test"
+    #       - name: timeout
+    #         value: "{{workflow.parameters.test_timeout}}"
+    #       - name: pre_status
+    #         value: "{{steps.run-pressure-test.outputs.parameters.status_code}}"
+    #     # when: "{{steps.run-pressure-test.outputs.parameters.status_code}} == true"
+
     - - name: cleanup
         templateRef:
           name: cleanup-operator
@@ -153,58 +171,60 @@ spec:
           - name: delete_pvcs
             value: "false"
 
-    - - name: handle-deploy-failure
-        template: handle-failure
-        arguments:
-          parameters:
-          - name: config
-            value: "{{inputs.parameters.test_config}}"
-          - name: release_name
-            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
-          - name: error_reason
-            value: "Deployment failed"
-        when: "{{steps.deploy-model.outputs.parameters.status_code}} == false || 
-                {{steps.wait-model-ready.status}} == false"
+    # - - name: handle-deploy-failure
+    #     template: handle-failure
+    #     arguments:
+    #       parameters:
+    #       - name: config
+    #         value: "{{inputs.parameters.test_config}}"
+    #       - name: release_name
+    #         value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+    #       - name: error_reason
+    #         value: "Deployment failed"
+    #     when: "{{steps.deploy-model.outputs.parameters.status_code}} == false || 
+    #             {{steps.wait-model-ready.status}} == false"
+    #             #  || 
+    #             # {{steps.monitor-test-job.status}} == false "
 
-  # 处理失败情况
-  - name: handle-failure
-    inputs:
-      parameters:
-      - name: config
-      - name: release_name
-      - name: error_reason
-    container:
-      image: alpine/k8s:1.30.14
-      command: [sh, -c]
-      args:
-        - |
-          # 解析配置
-          CONFIG='{{inputs.parameters.config}}'
-          MODEL_PATH=$(echo "$CONFIG" | jq -r '.deployment.model')
-          ENGINE=$(echo "$CONFIG" | jq -r '.deployment.engine')
-          MODEL_NAME=$(basename "$MODEL_PATH")  
+  # # 处理失败情况
+  # - name: handle-failure
+  #   inputs:
+  #     parameters:
+  #     - name: config
+  #     - name: release_name
+  #     - name: error_reason
+  #   container:
+  #     image: alpine/k8s:1.30.14
+  #     command: [sh, -c]
+  #     args:
+  #       - |
+  #         # 解析配置
+  #         CONFIG='{{inputs.parameters.config}}'
+  #         MODEL_PATH=$(echo "$CONFIG" | jq -r '.deployment.model')
+  #         ENGINE=$(echo "$CONFIG" | jq -r '.deployment.engine')
+  #         MODEL_NAME=$(basename "$MODEL_PATH")  
 
-          # 记录失败信息
-          FAIL_DIR="/shared-data/failed-tests/{{workflow.name}}"
-          mkdir -p $FAIL_DIR
+  #         # 记录失败信息
+  #         FAIL_DIR="/shared-data/failed-tests/{{workflow.name}}"
+  #         mkdir -p $FAIL_DIR
           
-          # 创建失败报告
-          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-          FAIL_FILE="$FAIL_DIR/${MODEL_NAME}_${ENGINE}_${TIMESTAMP}.json"
+  #         # 创建失败报告
+  #         TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+  #         FAIL_FILE="$FAIL_DIR/${MODEL_NAME}_${ENGINE}_${TIMESTAMP}.json"
           
-          echo "Recording failed test: $MODEL_NAME-$ENGINE"
-          echo "$CONFIG" > $FAIL_FILE
-          echo "{\"error\": \"{{inputs.parameters.error_reason}}\"}" >> $FAIL_FILE
+  #         echo "Recording failed test: $MODEL_NAME-$ENGINE"
+  #         echo "$CONFIG" > $FAIL_FILE
+  #         echo "{\"error\": \"{{inputs.parameters.error_reason}}\"}" >> $FAIL_FILE
           
-          # 尝试清理资源
-          release_name="{{inputs.parameters.release_name}}"
-          if [ -n "$release_name" ]; then
-            echo "Attempting to clean up failed deployment: $release_name"
-            helm uninstall $release_name || true
-            kubectl delete pods -l app.kubernetes.io/instance=$release_name --force --grace-period=0 || true
-          fi
+  #         # 尝试清理资源
+  #         release_name="{{inputs.parameters.release_name}}"
+  #         if [ -n "$release_name" ]; then
+  #           echo "Attempting to clean up failed deployment: $release_name"
+  #           helm uninstall $release_name || true
+  #           kubectl delete pods -l app.kubernetes.io/instance=$release_name --force --grace-period=0 || true
+  #         fi
           
-          echo "Marked test as failed and cleaned up resources"
-      volumeMounts:
-      - name: shared-pvc
-        mountPath: /shared-data
+  #         echo "Marked test as failed and cleaned up resources"
+  #     volumeMounts:
+  #     - name: shared-pvc
+  #       mountPath: /shared-data

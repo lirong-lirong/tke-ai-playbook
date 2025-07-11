@@ -24,12 +24,13 @@ spec:
       #   valueFrom:
       #     path: /tmp/report_path
     script:
-      image: fanjiankong-bj.tencentcloudcr.com/pengdrumli/evalscpoe-perf:v0.4
+      image: fanjiankong-bj.tencentcloudcr.com/pengdrumli/evalscpoe-perf:v0.5
       command: [python]
       source: |
         import os
         import json
         import sys
+        import time
         from evalscope.perf.main import run_perf_benchmark
         from evalscope.perf.arguments import Arguments
 
@@ -49,11 +50,12 @@ spec:
         configs_json_str = '{{inputs.parameters.configs_json}}'
         pre_status = "{{inputs.parameters.pre_status}}"
 
+        with open("/tmp/status_code", "w") as f:
+            f.write("false")
         if pre_status.lower() == 'false':
             print("pre_status 为 false，跳过性能测试。")
             sys.exit(0) # 正常退出脚本，Argo Workflow 任务将完成
-        with open("/tmp/status_code", "w") as f:
-            f.write("false")
+
 
         config = json.loads(configs_json_str)
         deployment_cfg = config.get("deployment", {})
@@ -66,6 +68,13 @@ spec:
         dataset_path = test_cfg.get("dataset_path", "")
         isl = test_cfg.get("ISL")
         osl = test_cfg.get("OSL")
+        tp = deployment_cfg.get("tp")
+        dp = deployment_cfg.get("dp")
+        ep = deployment_cfg.get("ep")
+        # pd = deployment_cfg.get("pd")
+        engine = deployment_cfg.get("engine")
+        node_size = deployment_cfg.get("node_size")
+
         eos = str(test_cfg.get("EOS", True)) # 确保它是字符串以便比较
         service = test_cfg.get("service", "127.0.0.1")
         service_port = test_cfg.get("service_port", 8801)
@@ -73,45 +82,57 @@ spec:
         ignore_eos = True if eos.lower() == 'false' else False
         url = f"http://{service}:{service_port}/v1/chat/completions"
 
-        swanlab_api_key = read_param_from_model_pvc_map('swanlab_api_key', default_value=os.getenv('SWANLAB_API_KEY', ''))
-        swanlab_host = read_param_from_model_pvc_map('swanlab_host', default_value=os.getenv('SWANLAB_HOST', ''))
+        DB_HOST = read_param_from_model_pvc_map('db_host', default_value=os.getenv('DB_HOST', ''))
+        DB_PORT = read_param_from_model_pvc_map('db_port', default_value=os.getenv('DB_PORT', ''))
+        DB_NAME = read_param_from_model_pvc_map('db_name', default_value=os.getenv('DB_NAME', ''))
+        DB_USER = read_param_from_model_pvc_map('db_user', default_value=os.getenv('DB_USER', ''))
+        DB_PASS = read_param_from_model_pvc_map('db_password', default_value=os.getenv('DB_PASS', ''))
 
         # Initialize Arguments with common parameters
-        task_cfg_args = {
-            'parallel': [1, 10, 50, 100, 200],
-            'number': [10, 20, 100, 200, 400],
-            'model': model,
-            'url': url,
-            'api': 'openai',
-            'tokenizer_path': model,
-            'extra_args': {'ignore_eos': ignore_eos},
-            'swanlab_api_key': swanlab_api_key,
-            'swanlab_host': swanlab_host,
-            'name': name
-        }
+        task_cfg_args = Arguments(
+            parallel=[1, 10, 16, 32, 50, 64, 100, 128, 200],
+            number=[10, 20, 160, 160, 200, 320, 300, 384, 400],
+            model=model,
+            url=url,
+            api='openai',
+            tokenizer_path=model,
+            extra_args={'ignore_eos': ignore_eos},
+            name=name,
+            metadata=name,
+            tp=tp,
+            dp=dp,
+            ep=ep,
+            engine=engine,
+            node_size=node_size,
+            enable_database_push=True,
+            db_host=DB_HOST,
+            db_port=DB_PORT,
+            db_name=DB_NAME,
+            db_user=DB_USER,
+            db_password=DB_PASS,
+            db_table_name='llm_perf',
+        )
 
         if dataset == 'random':
             # For random dataset, ISL corresponds to max_prompt_length and min_prompt_length
             # OSL corresponds to min_tokens and max_tokens
             # dataset_path is not used
-            task_cfg_args['dataset'] = 'random'
-            task_cfg_args['min_prompt_length'] = int(isl) - 20
-            task_cfg_args['max_prompt_length'] = int(isl) + 20
-            task_cfg_args['min_tokens'] = int(osl) - 20
-            task_cfg_args['max_tokens'] = int(osl) + 20# OSL applies to both min/max
+            task_cfg_args.dataset = 'random'
+            task_cfg_args.min_prompt_length = int(isl)
+            task_cfg_args.max_prompt_length = int(isl)
+            task_cfg_args.min_tokens = int(osl)
+            task_cfg_args.max_tokens = int(osl)
         elif dataset == 'custom':
             # For custom dataset, dataset_path is used, and ISL is not applicable
-            task_cfg_args['dataset'] = 'custom'
-            task_cfg_args['dataset_path'] = '/dataset/' + dataset_path
-            # ISL related parameters (min_prompt_length, max_prompt_length) are not set
-            # min_tokens and max_tokens still apply for response generation
-            task_cfg_args['min_tokens'] = int(osl) - 20
-            task_cfg_args['max_tokens'] = int(osl) + 20
+            task_cfg_args.dataset = 'custom'
+            task_cfg_args.dataset_path = '/dataset/' + dataset_path
+            task_cfg_args.min_tokens = int(osl)
+            task_cfg_args.max_tokens = int(osl)
         else:
             raise ValueError(f"Unsupported dataset type: {dataset}. Must be 'random' or 'custom'.")
 
-        task_cfg = Arguments(**task_cfg_args)
-        results = run_perf_benchmark(task_cfg)
+        # task_cfg = Arguments(**task_cfg_args)
+        results = run_perf_benchmark(task_cfg_args)
         with open("/tmp/status_code", "w") as f:
             f.write("true")
 

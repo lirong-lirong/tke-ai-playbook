@@ -55,7 +55,7 @@ spec:
         node_size = read_param_from_configmap('node_size')
         gpu_per_node = read_param_from_configmap('gpu_per_node', '[8]') # Provide default value
         tp_list = read_param_from_configmap('tp')
-        ep_list = read_param_from_configmap('ep')
+        ep_enable_list = read_param_from_configmap('ep_enable', '[false]') # 只有true或false
         dp_attention_enable = read_param_from_configmap('dp_attention', '[]')
         dp_list = read_param_from_configmap('dp')
         test_isl = read_param_from_configmap('ISL')
@@ -66,8 +66,7 @@ spec:
         test_service = read_param_from_configmap('service')
         test_service_port = read_param_from_configmap('service_port')
 
-        # 自定义函数：验证配置合法性
-        def is_valid(model, node_size, gpu_per_node, tp, ep, dp):
+        def is_valid(model, node_size, gpu_per_node, tp, ep_enable):
             total_gpu = node_size * gpu_per_node
             # 1. TP必须整除总GPU数
             if total_gpu % tp != 0:
@@ -75,17 +74,21 @@ spec:
             # 2. 特定模型的GPU数量要求
             if "deepseek" in model.lower() and (total_gpu < 8 or tp < 8):
                 return False, "DeepSeek models require at least 8 GPUs"
-            # 3. 非MOE模型不开启EP并行
-            if "deepseek" not in model.lower() and (ep > 1):
-                return False, "Not Moe Model (EP parallelism > 1 is not allowed for non-DeepSeek models)"
+            # 3. 非MOE模型不开启EP并行 (ep_enable 为 true 时 ep 会等于 tp)
+            # 只有当 ep_enable 为 true 且不是 DeepSeek 模型时才返回 False
+            if not "deepseek" in model.lower() and ep_enable:
+                return False, "EP parallelism is not allowed for non-DeepSeek models when ep_enable is true"
             return True, ""
 
         # 生成所有组合
         combinations = []
-        for m, e, ns, gpn, tp_val, ep_val, dp_val in itertools.product(
-            models, engines, node_size, gpu_per_node, tp_list, ep_list, dp_list
+        for m, e, ns, gpn, tp_val, ep_enabled, dp_val in itertools.product(
+            models, engines, node_size, gpu_per_node, tp_list, ep_enable_list, dp_list
         ):
-            valid, reason = is_valid(m, ns, gpn, tp_val, ep_val, dp_val)
+            # 根据 ep_enabled 的值设置 ep
+            ep_val = tp_val if ep_enabled else 1
+            
+            valid, reason = is_valid(m, ns, gpn, tp_val, ep_enabled)
             if not valid:
                 continue
             combinations.append({
@@ -94,25 +97,28 @@ spec:
                 "node_size": ns,
                 "gpu_per_node": gpn,
                 "tp": tp_val,
-                "ep": ep_val,
+                "ep": ep_val,  # ep 的值根据 ep_enabled 确定
+                "ep_enable": ep_enabled,
                 "dp": dp_val,
             }) 
 
-        # 构建完整的测试配置
         test_configs = []
         for combo in combinations:
-            # 非MOE模型不开启EP并行
+            model_short_name = combo["model"].split('/')[-1]
+            # dp_attention_val 应该基于模型的类型和 dp_attention_enable 的原始值来设置
+            # 原脚本中 dp_attention_enable 是一个列表，这里需要处理一下
+            # 如果 dp_attention_enable 列表不为空，则取其第一个值，否则默认为 False
+            effective_dp_attention_enable = dp_attention_enable[0] if dp_attention_enable else False
+
             is_deepseek = "deepseek" in combo["model"].lower()
             if is_deepseek:
-                ep_enable_val = combo["ep"] > 1 
-                dp_attention_val = dp_attention_enable   
+                # 对于 DeepSeek 模型，dp_attention 的值取决于 read_param_from_configmap 读取到的值
+                dp_attention_val = effective_dp_attention_enable
             else:
-                ep_enable_val = False          # For non-DeepSeek models, ep_enable is False
-                dp_attention_val = False       # For non-DeepSeek models, dp_attention is False
+                # 对于非 DeepSeek 模型，dp_attention 恒为 False
+                dp_attention_val = False
 
-        for combo in combinations:
-            model_short_name = combo["model"].split('/')[-1]
-            deployment_name = f"{model_short_name}-{combo['engine']}-node{combo['node_size']}-tp{combo['tp']}-dp{combo['dp']}-isl{test_isl}-osl{test_osl}-eos{test_eos}".replace('.', '-').replace('/', '-')
+            deployment_name = f"{model_short_name}-{combo['engine']}-node{combo['node_size']}-tp{combo['tp']}-dp{combo['dp']}-ep{combo['ep']}-isl{test_isl}-osl{test_osl}-eos{test_eos}".replace('.', '-').replace('/', '-')
 
             test_configs.append({
                 "deployment": {
@@ -121,7 +127,7 @@ spec:
                     "engine": combo["engine"],
                     "node_size": combo["node_size"],
                     "tp": combo["tp"],
-                    "dp": 1,
+                    "dp": combo["dp"], # dp 应该直接使用 combo['dp'] 的值
                     "ep": combo["ep"],
                     "gpu_per_node": combo["gpu_per_node"],
                     "replicas": 1,
@@ -129,7 +135,7 @@ spec:
                     "mem_fraction_static": 0.85,
                     "host_path": combo["model"],
                     "mount_path": "/work/models",
-                    "ep_enable": ep_enable_val,
+                    "ep_enable": combo["ep_enable"], # 使用组合中确定的 ep_enable 值
                     "dp_attention": dp_attention_val
                 },
                 "test": {
@@ -138,13 +144,13 @@ spec:
                     "OSL": int(test_osl),
                     "dataset": test_dataset,
                     "dataset_path": test_dataset_path,
-                    "EOS": True if test_eos  else False,
+                    "EOS": True if str(test_eos).lower() == 'true' else False, # 确保 EOS 是布尔值
                     "service": test_service,
                     "service_port": int(test_service_port)
                 }
             })
         # 输出JSON数组
-        print(json.dumps(test_configs))
+        print(json.dumps(test_configs, indent=4))
       volumeMounts:
       - name: test-parameters-config
         mountPath: /etc/test-parameters
