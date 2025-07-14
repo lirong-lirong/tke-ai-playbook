@@ -1,0 +1,44 @@
+model:
+  name: "Qwen/Qwen3-32B"
+  pvc:
+    enabled: false
+    name: "ai-model"
+    path: "Qwen/Qwen3-32B"
+  local:
+    enabled: true
+    path: "/data0/Qwen/Qwen3-32B"
+
+server:
+  replicas: 1
+  image: "ccr.ccs.tencentyun.com/tke-ai-playbook/sglang:nightly"
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      nvidia.com/gpu: 4
+    limits:
+      nvidia.com/gpu: 4
+  args:
+    tpSize: 4
+    ppSize: 1
+    epEnabled: false
+    maxModelLen: 32768
+    maxBatchSize: 128
+  extraArgs:
+  
+  env:
+  - name: NCCL_IB_CUDA_SUPPORT
+    value: "1"
+  - name: NCCL_IB_DISABLE
+    value: "0"
+  - name: NCCL_IB_GID_INDEX
+    value: "3"
+  - name: NCCL_DEBUG
+    value: INFO
+  - name: GLOO_SOCKET_IFNAME
+    value: eth0
+  - name: NCCL_SOCKET_IFNAME
+    value: eth0
+  service:
+    enabled: true
+    type: LoadBalancer
+    port: 60000
