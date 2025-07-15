@@ -2,34 +2,76 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: test-parameters-config
-  namespace: default # 确保与工作流命名空间一致
+  namespace: default
 data:
-  models: '["deepseek-ai/DeepSeek-V3-0324"]' # "Qwen/Qwen3-32B", "deepseek-ai/DeepSeek-V3-0324", "deepseek-ai/DeepSeek-R1-0528"
-  engines: '["sglang"]' # , "vllm"
-  node_size: '[2]'
-  gpu_per_node: '[8]' 
-  tp: '[16]'
+  # ======================================================
+  #         Cluster & Hardware Configuration
+  # ======================================================
+  node_size: '1'
+  gpu_per_node: '8'
+  gpu_info: "H20-96G"
+
+  # ======================================================
+  #               Model & Engine Selection
+  # ======================================================
+  models: '["Qwen/Qwen3-32B"]' # Models to test. , "deepseek-ai/DeepSeek-V3-0324"
+  engines: '["sglang"]' # Inference engines to test
+
+  # ======================================================
+  #        Inference Configuration Switches
+  # ======================================================
+  # List of booleans to control whether to generate configs
+  # for Pipeline Disaggregation (PD) mode.
+  pd_enable: '[false]' # , true
+  # List of booleans to control whether to enable EP (Expert Parallelism).
+  ep_enable: '[false]'
+  pvc_enable: 'false'
+    # model_basename + '_PVC'
+  DeepSeek-V3-0324_PVC: "pvc-for-deepseek-v3"
+
+  # ======================================================
+  #      PD (Pipeline Disaggregation) Parameters
+  # These are only used when a 'pd_enable: true' config is generated.
+  # The script will scale replicas to maximize GPU usage.
+  # ======================================================
+  pd_prefill_replicas: '1' # Base replica count for prefill stage
+  pd_decode_replicas: '1'  # Base replica count for decode stage
+  pd_prefill_tp: '8'
+  pd_decode_tp: '8'
+  pd_prefill_pp: '1'
+  pd_decode_pp: '1'
+
+  # ======================================================
+  #               Test Load Parameters
+  # ======================================================
   ISL: '0'
   OSL: '500'
-  concurrency: '"1 4 16 32 64 128"'
-  ep_enable: '[false, true]'
-  dp: '[1]'
-  dp_attention: 'false'
   EOS: 'true'
-  dataset: '"custom"'
-  dataset_path: '"agent-format.jsonl"'
-  service: '"llm-service-endpoint"'
-  service_port: '40000'
+  requests: '5'
+  concurrency: '[1, 2, 4, 16, 32, 40, 64, 80, 100, 128, 150, 200]'
 
-  # 注意：这里的值是纯字符串，不是JSON。
-  # 因为这些值是直接读取文件内容，所以不需要额外的JSON解析
+  # ======================================================
+  #               Dataset Configuration
+  # ======================================================
+  dataset: 'custom' # Type of dataset ('random' or 'custom')
+  dataset_path: 'agent-format.jsonl' # Path to custom dataset file if used
 
-  db_host: "129.226.53.35"
-  db_port: 3306
-  db_name: "evalscope_db"
-  db_user: "evalscope_user"
-  db_password: "evalscope_pass"
+  # ======================================================
+  #      (Optional) Fields for other scripts
+  # These are not used by generate-config.py but can be kept for other purposes
+  # ======================================================
+  # service: '"llm-service-endpoint"'
+  # service_port: '40000'
+  # db_host: "129.226.53.35"
+  # db_port: '3306'
 
-  useCustomDataset: 'true'
-  customDatasetPath: "agent-format.jsonl" # 数据集在独立PVC上的完整路径
-  customDatasetPvcName: "custom-dataset-pvc" # 独立数据集PVC的名称
+
+  db_host: "127.0.0.1"
+  db_port: '3306'
+  db_name: "db_name"
+  db_user: "db_user"
+  db_password: "db_pass"
+
+  # useCustomDataset: 'true'
+  # customDatasetPath: "agent-format.jsonl" # 数据集在独立PVC上的完整路径
+  # customDatasetPvcName: "custom-dataset-pvc" # 独立数据集PVC的名称

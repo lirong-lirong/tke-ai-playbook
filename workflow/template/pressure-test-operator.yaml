@@ -82,12 +82,14 @@ spec:
         ignore_eos = True if eos.lower() == 'false' else False
         url = f"http://{service}:{service_port}/v1/chat/completions"
 
+        # swanlab_api_key = read_param_from_model_pvc_map('swanlab_api_key', default_value=os.getenv('SWANLAB_API_KEY', ''))
+        # swanlab_host = read_param_from_model_pvc_map('swanlab_host', default_value=os.getenv('SWANLAB_HOST', ''))
         DB_HOST = read_param_from_model_pvc_map('db_host', default_value=os.getenv('DB_HOST', ''))
         DB_PORT = read_param_from_model_pvc_map('db_port', default_value=os.getenv('DB_PORT', ''))
         DB_NAME = read_param_from_model_pvc_map('db_name', default_value=os.getenv('DB_NAME', ''))
         DB_USER = read_param_from_model_pvc_map('db_user', default_value=os.getenv('DB_USER', ''))
         DB_PASS = read_param_from_model_pvc_map('db_password', default_value=os.getenv('DB_PASS', ''))
-
+        
         # Initialize Arguments with common parameters
         task_cfg_args = Arguments(
             parallel=[1, 10, 16, 32, 50, 64, 100, 128, 200],
