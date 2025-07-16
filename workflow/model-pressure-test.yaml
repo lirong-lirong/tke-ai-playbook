@@ -73,24 +73,24 @@ spec:
           - name: max_retries
             value: "{{workflow.parameters.max_retries}}"
 
-    # 等待模型就绪
-    - - name: wait-model-ready
-        templateRef:
-          name: wait-resource-operator
-          template: wait-for-resource
-          clusterScope: true
-        arguments:
-          parameters:
-          - name: resource_type
-            value: "statefulset"
-          - name: resource_name
-            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
-          - name: timeout
-            value: "{{workflow.parameters.model_timeout}}"
-          - name: pre_status
-            value: "{{steps.deploy-model.outputs.parameters.status_code}}"
-          - name: namespace
-            value: "{{workflow.namespace}}"
+    # # 等待模型就绪
+    # - - name: wait-model-ready
+    #     templateRef:
+    #       name: wait-resource-operator
+    #       template: wait-for-resource
+    #       clusterScope: true
+    #     arguments:
+    #       parameters:
+    #       - name: resource_type
+    #         value: "statefulset"
+    #       - name: resource_name
+    #         value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+    #       - name: timeout
+    #         value: "{{workflow.parameters.model_timeout}}"
+    #       - name: pre_status
+    #         value: "{{steps.deploy-model.outputs.parameters.status_code}}"
+    #       - name: namespace
+    #         value: "{{workflow.namespace}}"
 
     - - name: run-pressure-test
         templateRef:
@@ -101,8 +101,13 @@ spec:
           parameters:
           - name: configs_json
             value: "{{inputs.parameters.test_config}}"
+          - name: values_yaml
+            value: "{{steps.deploy-model.outputs.parameters.values_yaml}}"
           - name: pre_status
-            value: "{{steps.wait-model-ready.outputs.parameters.status_code}}"
+            value: "{{steps.deploy-model.outputs.parameters.status_code}}"
+            # value: "{{steps.wait-model-ready.outputs.parameters.status_code}}"
+          - name: release_name
+            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
 
     - - name: cleanup
         templateRef:

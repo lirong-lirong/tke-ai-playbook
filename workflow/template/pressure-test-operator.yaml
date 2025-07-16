@@ -8,6 +8,8 @@ spec:
     parameters:
     - name: pre_status
     - name: configs_json
+    - name: release_name
+    - name: values_yaml
   
   templates:
   - name: pressure-test
@@ -15,27 +17,222 @@ spec:
       parameters:
       - name: configs_json
       - name: pre_status
+      - name: release_name
+      - name: values_yaml
     outputs:
       parameters:
       - name: status_code
         valueFrom:
           path: /tmp/status_code
-      # - name: report_path
-      #   valueFrom:
-      #     path: /tmp/report_path
+
     script:
-      image: fanjiankong-bj.tencentcloudcr.com/pengdrumli/evalscpoe-perf:v0.5
+      image: fanjiankong-bj.tencentcloudcr.com/pengdrumli/launch-evalscpoe-perf:v0.1
       command: [python]
       source: |
-        import os
-        import json
-        import sys
-        import time
+        import time, os
+        import logging
         from evalscope.perf.main import run_perf_benchmark
         from evalscope.perf.arguments import Arguments
+        import json
+        import json
+        import logging
+        import time
+        from dataclasses import dataclass
+        from datetime import datetime, timezone
+        from typing import Any, Dict, Optional
+
+        # --- FIX: Move import to global scope ---
+        import mysql.connector
+        from mysql.connector import errorcode
+
+        # --- Basic Logging Setup ---
+        logger = logging.getLogger(__name__)
+
+
+        @dataclass
+        class DatabaseArgs:
+            """A dataclass to hold all database connection parameters."""
+            db_host: str
+            db_port: str
+            db_user: str
+            db_password: str
+            db_name: str
+            db_table_name: str = 'evalscope_perf_results'
+
+
+        # ==============================================================================
+        #                      HELPER FUNCTIONS
+        # ==============================================================================
+
+        def _flatten_dict(data: dict, parent_key: str = '', sep: str = '_') -> dict:
+            items = []
+            for k, v in data.items():
+                new_key = parent_key + sep + k if parent_key else k
+                if isinstance(v, dict):
+                    items.extend(_flatten_dict(v, new_key, sep=sep).items())
+                else:
+                    if isinstance(v, (list, tuple)):
+                        v = str(v)
+                    items.append((new_key, v))
+            return dict(items)
+
+
+        def _get_mysql_connection(args: DatabaseArgs):
+            # The import statement was moved to the top of the file.
+            try:
+                connection = mysql.connector.connect(
+                    host=args.db_host, port=args.db_port, user=args.db_user,
+                    password=args.db_password, database=args.db_name
+                )
+                return connection
+            except mysql.connector.Error as err:
+                if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+                    logger.error("Access denied. Check your MySQL username or password.")
+                elif err.errno == errorcode.ER_BAD_DB_ERROR:
+                    logger.error(f"Database '{args.db_name}' does not exist.")
+                else:
+                    logger.error(f"Failed to connect to MySQL: {err}", exc_info=True)
+                return None
+
+
+        def _get_sql_type(value: Any) -> str:
+            """Infers SQL type from a Python value for table creation."""
+            if isinstance(value, bool):
+                return 'BOOLEAN'
+            if isinstance(value, int):
+                return 'BIGINT'
+            elif isinstance(value, float):
+                return 'DOUBLE'
+            elif isinstance(value, str) and len(value) < 256:
+                return 'VARCHAR(255)'
+            else:
+                return 'TEXT'
+
+
+        def _restructure_percentiles(percentile_result: dict) -> dict:
+            """Flattens the percentile results dictionary for database insertion."""
+            if not percentile_result or 'Percentiles' not in percentile_result:
+                return {}
+
+            percentile_labels = [p.replace('%', '') for p in percentile_result.get('Percentiles', [])]
+            flat_percentiles = {}
+
+            for key, values in percentile_result.items():
+                if key == 'Percentiles':
+                    continue
+                sanitized_key = key.replace(' (s)', '_seconds').replace(' (tok/s)', '_tok_per_s').replace(' ', '_')
+                for i, label in enumerate(percentile_labels):
+                    if i < len(values):
+                        flat_key = f"p{label}_{sanitized_key}"
+                        flat_percentiles[flat_key] = values[i]
+            return flat_percentiles
+
+
+        def _get_existing_columns(cursor, table_name: str) -> set:
+            """Fetches the set of existing column names for a given table."""
+            try:
+                cursor.execute(f"DESCRIBE `{table_name}`")
+                return {row[0] for row in cursor.fetchall()}
+            except mysql.connector.Error as err:
+                if err.errno == 1146: # ER_NO_SUCH_TABLE
+                    return set()
+                logger.error(f"Failed to describe table `{table_name}`: {err}", exc_info=True)
+                raise
+
+
+        def _save_to_mysql_internal(db_args: DatabaseArgs, data: Dict[str, Any]):
+            """Internal function to save a flat dictionary to a MySQL table."""
+            table_name = db_args.db_table_name
+            connection = _get_mysql_connection(db_args)
+            if not connection:
+                return
+
+            try:
+                cursor = connection.cursor()
+                existing_columns = _get_existing_columns(cursor, table_name)
+                new_columns = set(data.keys()) - existing_columns
+
+                if not existing_columns:
+                    columns_defs = [f"`{col}` {_get_sql_type(val)}" for col, val in data.items()]
+                    create_table_sql = f"CREATE TABLE `{table_name}` (id INT AUTO_INCREMENT PRIMARY KEY, {', '.join(columns_defs)})"
+                    logger.info(f"Table `{table_name}` not found. Creating it...")
+                    cursor.execute(create_table_sql)
+                elif new_columns:
+                    logger.info(f"New columns found: {new_columns}. Altering table...")
+                    for col in new_columns:
+                        col_type = _get_sql_type(data[col])
+                        alter_table_sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col}` {col_type}"
+                        cursor.execute(alter_table_sql)
+
+                columns_str = '`, `'.join(data.keys())
+                placeholders = ', '.join(['%s'] * len(data))
+                insert_sql = f"INSERT INTO `{table_name}` (`{columns_str}`) VALUES ({placeholders})"
+                
+                cursor.execute(insert_sql, list(data.values()))
+                connection.commit()
+                logger.info(f"Successfully saved 1 row to MySQL table: `{table_name}`")
+
+            except Exception as e:
+                logger.error(f"Failed to save data to MySQL: {e}", exc_info=True)
+                if connection.is_connected():
+                    connection.rollback()
+            finally:
+                if connection.is_connected():
+                    cursor.close()
+                    connection.close()
+
+
+        # ==============================================================================
+        #                      MAIN PUBLIC FUNCTION (MODIFIED)
+        # ==============================================================================
+
+        def save_benchmark_results_to_db(
+            db_args: DatabaseArgs,
+            static_config: Dict[str, Any],
+            concurrency: int,
+            num_requests: int,
+            start_timestamp: float,
+            end_timestamp: float,
+            perf_metrics: Dict[str, Any],
+            percentile_metrics: Dict[str, Any]
+        ):
+            """
+            Merges static config with dynamic performance results and saves to the DB.
+            """
+            logger.info("Preparing data for database insertion...")
+
+            flat_static_config = _flatten_dict(static_config)
+            flat_percentiles = _restructure_percentiles(percentile_metrics)
+
+            # Combine all data sources into a single dictionary for the DB row
+            final_data = {
+                **flat_static_config,
+                **perf_metrics,
+                **flat_percentiles,
+                'concurrency': concurrency,
+                'num_requests': num_requests,
+                'start_timestamp': int(start_timestamp), # <-- NEW FIELD (as integer)
+                'end_timestamp': int(end_timestamp),     # <-- NEW FIELD (as integer)
+                # The old 'timestamp' field is now removed.
+            }
+            
+            _save_to_mysql_internal(db_args, final_data)
+
+        '''
+        1. get the workflow test config
+        2. set the database config
+        3. set the test config
+        LOOP:
+            4. run the test
+            5. send the metadata and resutl to mysql
+        END LOOP
+        '''
+
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
         CONFIG_MAP_MODEL_PVC_PATH = "/etc/test-parameters"
-        def read_param_from_model_pvc_map(param_name, default_value=''):
+        STATUES_CODE = '/tmp/status_code'
+        def read_configmap(param_name, default_value=''):
             file_path = os.path.join(CONFIG_MAP_MODEL_PVC_PATH, param_name)
             if os.path.exists(file_path):
                 try:
@@ -46,96 +243,113 @@ spec:
                     print(f"Error reading {file_path}: {e}. Returning default value.")
                     return default_value
             return default_value
-        
+
+        # --- get the workflow test config --- #
+        url=os.environ.get('LLM_SERVICE', 'http://''{{inputs.parameters.release_name}}'':60000')
         configs_json_str = '{{inputs.parameters.configs_json}}'
+        print(configs_json_str)
         pre_status = "{{inputs.parameters.pre_status}}"
 
-        with open("/tmp/status_code", "w") as f:
+        with open(STATUES_CODE, "w") as f:
             f.write("false")
         if pre_status.lower() == 'false':
             print("pre_status 为 false，跳过性能测试。")
-            sys.exit(0) # 正常退出脚本，Argo Workflow 任务将完成
+            sys.exit(0)
 
+        config_data = json.loads(configs_json_str)
 
-        config = json.loads(configs_json_str)
-        deployment_cfg = config.get("deployment", {})
-        test_cfg = config.get("test", {})
+        # --- database config --- #
+        DB_HOST = read_configmap('db_host', default_value=os.getenv('DB_HOST', '127.0.0.1'))
+        DB_PORT = read_configmap('db_port', default_value=os.getenv('DB_PORT', '3306'))
+        DB_NAME = read_configmap('db_name', default_value=os.getenv('DB_NAME', 'db'))
+        DB_USER = read_configmap('db_user', default_value=os.getenv('DB_USER', 'user'))
+        DB_PASS = read_configmap('db_password', default_value=os.getenv('DB_PASS', 'passwd'))
+        DB_TABLE = read_configmap('db_table', default_value=os.environ.get('DB_TABLE', 'test_table'))
 
-        name = deployment_cfg.get("name")
-        model = deployment_cfg.get("model", "default-model") # 使用部署模型
-        tokenizer = test_cfg.get("tokenizer", model) # 使用测试 tokenizer，如果没有则回退到部署模型
-        dataset = test_cfg.get("dataset", "random")
-        dataset_path = test_cfg.get("dataset_path", "")
-        isl = test_cfg.get("ISL")
-        osl = test_cfg.get("OSL")
-        tp = deployment_cfg.get("tp")
-        dp = deployment_cfg.get("dp")
-        ep = deployment_cfg.get("ep")
-        # pd = deployment_cfg.get("pd")
-        engine = deployment_cfg.get("engine")
-        node_size = deployment_cfg.get("node_size")
-
-        eos = str(test_cfg.get("EOS", True)) # 确保它是字符串以便比较
-        service = test_cfg.get("service", "127.0.0.1")
-        service_port = test_cfg.get("service_port", 8801)
-
-        ignore_eos = True if eos.lower() == 'false' else False
-        url = f"http://{service}:{service_port}/v1/chat/completions"
-
-        # swanlab_api_key = read_param_from_model_pvc_map('swanlab_api_key', default_value=os.getenv('SWANLAB_API_KEY', ''))
-        # swanlab_host = read_param_from_model_pvc_map('swanlab_host', default_value=os.getenv('SWANLAB_HOST', ''))
-        DB_HOST = read_param_from_model_pvc_map('db_host', default_value=os.getenv('DB_HOST', ''))
-        DB_PORT = read_param_from_model_pvc_map('db_port', default_value=os.getenv('DB_PORT', ''))
-        DB_NAME = read_param_from_model_pvc_map('db_name', default_value=os.getenv('DB_NAME', ''))
-        DB_USER = read_param_from_model_pvc_map('db_user', default_value=os.getenv('DB_USER', ''))
-        DB_PASS = read_param_from_model_pvc_map('db_password', default_value=os.getenv('DB_PASS', ''))
-        
-        # Initialize Arguments with common parameters
-        task_cfg_args = Arguments(
-            parallel=[1, 10, 16, 32, 50, 64, 100, 128, 200],
-            number=[10, 20, 160, 160, 200, 320, 300, 384, 400],
-            model=model,
-            url=url,
-            api='openai',
-            tokenizer_path=model,
-            extra_args={'ignore_eos': ignore_eos},
-            name=name,
-            metadata=name,
-            tp=tp,
-            dp=dp,
-            ep=ep,
-            engine=engine,
-            node_size=node_size,
-            enable_database_push=True,
+        db_connection_args = DatabaseArgs(
             db_host=DB_HOST,
             db_port=DB_PORT,
             db_name=DB_NAME,
             db_user=DB_USER,
             db_password=DB_PASS,
-            db_table_name='llm_perf',
+            db_table_name=DB_TABLE,
         )
 
-        if dataset == 'random':
-            # For random dataset, ISL corresponds to max_prompt_length and min_prompt_length
-            # OSL corresponds to min_tokens and max_tokens
-            # dataset_path is not used
-            task_cfg_args.dataset = 'random'
-            task_cfg_args.min_prompt_length = int(isl)
-            task_cfg_args.max_prompt_length = int(isl)
-            task_cfg_args.min_tokens = int(osl)
-            task_cfg_args.max_tokens = int(osl)
-        elif dataset == 'custom':
-            # For custom dataset, dataset_path is used, and ISL is not applicable
-            task_cfg_args.dataset = 'custom'
-            task_cfg_args.dataset_path = '/dataset/' + dataset_path
-            task_cfg_args.min_tokens = int(osl)
-            task_cfg_args.max_tokens = int(osl)
-        else:
-            raise ValueError(f"Unsupported dataset type: {dataset}. Must be 'random' or 'custom'.")
+        # --- test config --- #
+        concurrency_list = config_data['test']['concurrency']
+        requests = config_data['test']['requests']
+        requests_per_list = [c * requests for c in concurrency_list]
+        model = config_data['deploy']['model']['name']
+        dataset = config_data['test']['dataset']
+        dataset_path = config_data['test']['dataset_path']
+        ISL = config_data['test']['ISL']
+        OSL = config_data['test']['OSL']
+        EOS = config_data['test']['EOS']
 
-        # task_cfg = Arguments(**task_cfg_args)
-        results = run_perf_benchmark(task_cfg_args)
-        with open("/tmp/status_code", "w") as f:
+        # -- Loop through each concurrency level and run the benchmark ---#
+        for concurrency, num_requests in zip(concurrency_list, requests_per_list):
+            logging.info(f"--- Running test for concurrency: {concurrency} with {num_requests} requests ---")
+
+            # Create a new Arguments object for each specific run
+            task_cfg = Arguments(
+                # --- Model & API ---
+                model = model,
+                url = url+'/v1/chat/completions',
+                api = 'openai',
+                tokenizer_path = model,
+                parallel = concurrency,
+                number = num_requests,
+                
+                # --- Dataset & Prompt Parameters ---
+                dataset = dataset,
+                prefix_length=0,
+                min_prompt_length=ISL,
+                max_prompt_length=ISL,
+                extra_args={'ignore_eos': EOS},
+            )
+            if dataset_path:
+                task_cfg.dataset_path = dataset_path
+            if OSL > 100:
+                task_cfg.min_tokens = OSL
+                task_cfg.max_tokens = OSL
+            if ISL > 100:
+                task_cfg.min_prompt_length=ISL
+                task_cfg.max_prompt_length=ISL
+
+
+            try:
+                # Run the benchmark for the current concurrency level
+                test_start_time = time.time()
+                results, percentile_results = run_perf_benchmark(task_cfg)
+                test_end_time = time.time()
+                
+                logging.info(f"Successfully completed test for concurrency: {concurrency}")
+                if results:
+                    logging.info(f"Result summary for concurrency {concurrency}: {results}")
+                else:
+                    continue
+
+            except Exception as e:
+                logging.error(f"An error occurred during the test for concurrency {concurrency}: {e}", exc_info=True)
+                continue
+
+            try:
+                save_benchmark_results_to_db(
+                    db_args=db_connection_args,
+                    percentile_metrics=percentile_results,
+                    concurrency=concurrency,
+                    num_requests=num_requests,
+                    start_timestamp=test_start_time,
+                    end_timestamp=test_end_time,
+                    static_config=config_data,
+                    perf_metrics=results,
+                )
+            except Exception as e:
+                logging.error(f"An error occurred during the save data for concurrency {concurrency}: {e}", exc_info=True)
+            time.sleep(15)
+
+        logging.info("--- Benchmark job finished successfully. ---")
+        with open(STATUES_CODE, "w") as f:
             f.write("true")
 
       volumeMounts:
