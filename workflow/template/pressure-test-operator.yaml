@@ -128,20 +128,23 @@ spec:
             return flat_percentiles
 
 
-        def _get_existing_columns(cursor, table_name: str) -> set:
-            """Fetches the set of existing column names for a given table."""
+        def _get_existing_column_info(cursor, table_name: str) -> dict:
+            """Fetches existing column names and their types for a given table."""
             try:
-                cursor.execute(f"DESCRIBE `{table_name}`")
-                return {row[0] for row in cursor.fetchall()}
+                cursor.execute(f"SHOW COLUMNS FROM `{table_name}`")
+                return {
+                    row[0]: row[1].decode('utf-8') if isinstance(row[1], bytearray) else row[1]
+                    for row in cursor.fetchall()
+                }
             except mysql.connector.Error as err:
-                if err.errno == 1146: # ER_NO_SUCH_TABLE
-                    return set()
+                if err.errno == 1146:  # ER_NO_SUCH_TABLE
+                    return {}
                 logger.error(f"Failed to describe table `{table_name}`: {err}", exc_info=True)
                 raise
 
 
         def _save_to_mysql_internal(db_args: DatabaseArgs, data: Dict[str, Any]):
-            """Internal function to save a flat dictionary to a MySQL table."""
+            """Saves a flat dictionary to a MySQL table, creating/altering as needed."""
             table_name = db_args.db_table_name
             connection = _get_mysql_connection(db_args)
             if not connection:
@@ -149,20 +152,30 @@ spec:
 
             try:
                 cursor = connection.cursor()
-                existing_columns = _get_existing_columns(cursor, table_name)
-                new_columns = set(data.keys()) - existing_columns
+                
+                existing_columns_info = _get_existing_column_info(cursor, table_name)
+                existing_columns = set(existing_columns_info.keys())
 
                 if not existing_columns:
                     columns_defs = [f"`{col}` {_get_sql_type(val)}" for col, val in data.items()]
                     create_table_sql = f"CREATE TABLE `{table_name}` (id INT AUTO_INCREMENT PRIMARY KEY, {', '.join(columns_defs)})"
                     logger.info(f"Table `{table_name}` not found. Creating it...")
                     cursor.execute(create_table_sql)
-                elif new_columns:
-                    logger.info(f"New columns found: {new_columns}. Altering table...")
-                    for col in new_columns:
-                        col_type = _get_sql_type(data[col])
-                        alter_table_sql = f"ALTER TABLE `{table_name}` ADD COLUMN `{col}` {col_type}"
-                        cursor.execute(alter_table_sql)
+                else:
+                    new_columns = set(data.keys()) - existing_columns
+                    if new_columns:
+                        logger.info(f"New columns found: {new_columns}. Adding them...")
+                        for col in new_columns:
+                            col_type = _get_sql_type(data[col])
+                            cursor.execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{col}` {col_type}")
+
+                    for col_name, col_value in data.items():
+                        if col_name in existing_columns:
+                            required_type = _get_sql_type(col_value).upper()
+                            current_type = existing_columns_info[col_name].upper()
+                            if required_type == 'TEXT' and 'TEXT' not in current_type:
+                                logger.warning(f"Column `{col_name}` is `{current_type}` but requires `TEXT`. Modifying column...")
+                                cursor.execute(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{col_name}` {required_type}")
 
                 columns_str = '`, `'.join(data.keys())
                 placeholders = ', '.join(['%s'] * len(data))
@@ -285,6 +298,7 @@ spec:
         ISL = config_data['test']['ISL']
         OSL = config_data['test']['OSL']
         EOS = config_data['test']['EOS']
+        config_data['helm']['values'] = ''' '{{inputs.parameters.values_yaml}}' '''
 
         # -- Loop through each concurrency level and run the benchmark ---#
         for concurrency, num_requests in zip(concurrency_list, requests_per_list):
