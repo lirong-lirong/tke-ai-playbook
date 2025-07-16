@@ -1,0 +1,100 @@
+[
+    {
+        "metadata": {
+            "name": "workflow ID",
+            "node_size": 4,
+            "gpu_per_node": 8,
+            "gpu_info": "H20-96G"
+        },
+        "deploy": {
+            "model": {
+                "name": "deepseek-ai/DeepSeek-V3-0324",
+                "PVC": {
+                    "enable": true,
+                    "name": "ai-model"
+                },
+                "local": {
+                    "enable": false
+                },
+                "path": "work/model/"
+            },
+            "engine": {
+                "name": "sglang",
+                "version": "0.4.8",
+                "image": "lylsdf/sglang:dev"
+            },
+            "replicas": 1,
+            "group_size": 1,
+            "pd": {
+                "enable": false,
+                "prefill": {
+                    "replicas": 1,
+                    "tp": 8,
+                    "pp": 8,
+                    "ep_enable": true,
+                    "args": [
+                        "--enable-eplb",
+                        "--enable-torch-compile"
+                    ],
+                    "env": [
+                        "NCCL_IB_CUDA_SUPPORT=1",
+                        "NCCL_IB_GID_INDEX=3"
+                    ]
+                },
+                "decode": {
+                    "replicas": 1,
+                    "tp": 8,
+                    "pp": 8,
+                    "ep_enable": true,
+                    "args": [
+                        "--enable-eplb",
+                        "--enable-torch-compile"
+                    ],
+                    "env": [
+                        "NCCL_IB_CUDA_SUPPORT=1",
+                        "NCCL_IB_GID_INDEX=3"
+                    ]
+                }
+            },
+            "tp": 8,
+            "pp": 1,
+            "ep_enable": true,
+            "args": [
+                "--enable-eplb",
+                "--enable-torch-compile"
+            ],
+            "env": [
+                "NCCL_IB_CUDA_SUPPORT=1",
+                "NCCL_IB_GID_INDEX=3"
+            ]
+        },
+        "test": {
+            "tokenizer": "model_path",
+            "ISL": 0,
+            "OSL": 500,
+            "dataset": "random",
+            "dataset_path": "",
+            "EOS": true,
+            "concurrency": [
+                1,
+                2,
+                4,
+                16,
+                32,
+                40,
+                64,
+                80,
+                100,
+                128,
+                150,
+                200
+            ],
+            "requests": 5
+        },
+        "helm": {
+            "name": "path_to_helm",
+            "version": "v0.0.1",
+            "values": "\nimage:\n  repository: fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang-with-mooncake\n  tag: v0.1\n  pullPolicy: IfNotPresent\n\n# 模型配置\nmodel:\n  pvcName: \"default-model-pvc\"\n  mountPath: \"/work/models\"\n  modelPath: \"\" # 示例: meta-llama/Llama-3.1-8B-Instruct\n\n# SGLang PD 分离配置\npdDisaggregation:\n  enabled: true # 是否启用 PD 分离模式\n\n  # Load Balancer 配置 (sglang_router)\n  loadBalancer:\n    replicaCount: 1\n    port: 8000 # LB 对外暴露的端口\n    resources: # LB 通常不需要 GPU\n      gpu: 0\n      cpu: 0\n      memory: 0\n    commandStr: \"python3 -m sglang.srt.disaggregation.mini_lb --host 0.0.0.0 --port {{ .Values.pdDisaggregation.loadBalancer.port }}\"\n"
+        }
+    }
+]
