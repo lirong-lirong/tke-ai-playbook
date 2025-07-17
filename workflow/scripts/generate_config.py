@@ -3,41 +3,42 @@ import itertools
 import os
 import math
 
+CONFIG_MAP_MOUNT_PATH = '/etc/test-parameters'
+OUTPUT_FILE_PATH = '/tmp/output'
+
+def read_json_param(param_name, default_value='[]'):
+    file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, param_name)
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if not content:
+                    return json.loads(default_value)
+                return json.loads(content)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Error decoding JSON from {file_path}: {e}. Returning default value.")
+            return json.loads(default_value)
+    return json.loads(default_value)
+
+def read_str_param(param_name, default_value=''):
+    file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, param_name)
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except IOError as e:
+            print(f"Error reading string from {file_path}: {e}. Returning default value.")
+            return default_value
+    return default_value
+
+def read_int_param(param_name, default_value=0):
+    return int(read_str_param(param_name, str(default_value)))
+
+def read_bool_param(param_name, default_value=False):
+    return read_str_param(param_name, str(default_value)).lower() == 'true'
+
 def main():
-    CONFIG_MAP_MOUNT_PATH = '/etc/test-parameters'
-    OUTPUT_FILE_PATH = '/tmp/output'
-
-    def read_json_param(param_name, default_value='[]'):
-        file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, param_name)
-        if os.path.exists(file_path):
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read().strip()
-                    if not content:
-                        return json.loads(default_value)
-                    return json.loads(content)
-            except (json.JSONDecodeError, IOError) as e:
-                print(f"Error decoding JSON from {file_path}: {e}. Returning default value.")
-                return json.loads(default_value)
-        return json.loads(default_value)
-
-    def read_str_param(param_name, default_value=''):
-        file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, param_name)
-        if os.path.exists(file_path):
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    return f.read().strip()
-            except IOError as e:
-                print(f"Error reading string from {file_path}: {e}. Returning default value.")
-                return default_value
-        return default_value
-
-    def read_int_param(param_name, default_value=0):
-        return int(read_str_param(param_name, str(default_value)))
-
-    def read_bool_param(param_name, default_value=False):
-        return read_str_param(param_name, str(default_value)).lower() == 'true'
-
+    # All parameter reading is now safely inside main()
     node_size = read_int_param('node_size', 1)
     gpu_per_node = read_int_param('gpu_per_node', 8)
     gpu_info = read_str_param('gpu_info', 'unknown')
@@ -64,6 +65,7 @@ def main():
     test_concurrency = read_json_param('concurrency', '[1, 8, 16, 32, 64, 128]')
     test_requests = read_str_param('requests', '5')
 
+    # All helper functions are defined within main's scope
     def is_valid_model_config(model, total_gpu, tp):
         if "deepseek" in model.lower() and (total_gpu < 8 or tp < 8):
             return False, "DeepSeek models require at least 8 GPUs and TP>=8"
@@ -78,10 +80,9 @@ def main():
             if not valid_model:
                 continue
             max_pp = total_gpus // tp
-            for pp in range(1, max_pp + 1):
+            possible_pp = [2**i for i in range(int(math.log2(max_pp)) + 1)] if max_pp > 0 else []
+            for pp in possible_pp:
                 replicas = total_gpus // (tp * pp)
-                if replicas != 1:
-                    continue
                 combo = base_combo.copy()
                 combo.update({"tp": tp, "pp": pp, "replicas": replicas, "pd_enable": False})
                 configs.append(build_final_config(combo))
@@ -145,10 +146,13 @@ def main():
                 "prefill": {"replicas": combo["prefill_replicas"], "tp": pd_prefill_tp, "pp": pd_prefill_pp, "ep_enable": combo["ep_enable"], "args": [], "env": []},
                 "decode": {"replicas": combo["decode_replicas"], "tp": pd_decode_tp, "pp": pd_decode_pp, "ep_enable": combo["ep_enable"], "args": [], "env": []}
             })
+            # Add placeholder keys for structural consistency in PD mode
+            config["deploy"].update({"replicas": 0, "tp": 0, "pp": 0})
         else:
             config["deploy"].update({"replicas": combo["replicas"], "tp": combo["tp"], "pp": combo["pp"]})
         return config
 
+    # This is the original core logic, now correctly placed inside main
     all_test_configs = []
     base_product_iter = itertools.product(models, engines, pd_enable_list, ep_enable_list)
     for model, engine, pd_on, ep_on in base_product_iter:
@@ -169,7 +173,10 @@ def main():
         else:
             all_test_configs.extend(generate_non_pd_configs(base_combination))
 
-    final_output = json.dumps(all_test_configs, indent=4)
+    return json.dumps(all_test_configs, indent=4)
+
+if __name__ == "__main__":
+    final_output = main()
     print(final_output)
 
     try:
@@ -178,6 +185,3 @@ def main():
         print(f"Configuration successfully written to {OUTPUT_FILE_PATH}")
     except IOError as e:
         print(f"Error writing to file {OUTPUT_FILE_PATH}: {e}")
-
-if __name__ == "__main__":
-    main()
