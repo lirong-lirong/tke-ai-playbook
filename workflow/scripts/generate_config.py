@@ -1,0 +1,183 @@
+import json
+import itertools
+import os
+import math
+
+def main():
+    CONFIG_MAP_MOUNT_PATH = '/etc/test-parameters'
+    OUTPUT_FILE_PATH = '/tmp/output'
+
+    def read_json_param(param_name, default_value='[]'):
+        file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, param_name)
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if not content:
+                        return json.loads(default_value)
+                    return json.loads(content)
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Error decoding JSON from {file_path}: {e}. Returning default value.")
+                return json.loads(default_value)
+        return json.loads(default_value)
+
+    def read_str_param(param_name, default_value=''):
+        file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, param_name)
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    return f.read().strip()
+            except IOError as e:
+                print(f"Error reading string from {file_path}: {e}. Returning default value.")
+                return default_value
+        return default_value
+
+    def read_int_param(param_name, default_value=0):
+        return int(read_str_param(param_name, str(default_value)))
+
+    def read_bool_param(param_name, default_value=False):
+        return read_str_param(param_name, str(default_value)).lower() == 'true'
+
+    node_size = read_int_param('node_size', 1)
+    gpu_per_node = read_int_param('gpu_per_node', 8)
+    gpu_info = read_str_param('gpu_info', 'unknown')
+    total_gpus = node_size * gpu_per_node
+    models = read_json_param('models')
+    engines = read_json_param('engines')
+    pd_enable_list = read_json_param('pd_enable', '[false]')
+    ep_enable_list = read_json_param('ep_enable', '[true]')
+    
+    pvc_enable = read_bool_param('pvc_enable', False)
+    local_enable = read_bool_param('local_enable', True)
+
+    pd_prefill_replicas = read_int_param('pd_prefill_replicas', 1)
+    pd_decode_replicas = read_int_param('pd_decode_replicas', 1)
+    pd_prefill_tp = read_int_param('pd_prefill_tp', 1)
+    pd_decode_tp = read_int_param('pd_decode_tp', 1)
+    pd_prefill_pp = read_int_param('pd_prefill_pp', 1)
+    pd_decode_pp = read_int_param('pd_decode_pp', 1)
+    test_isl = read_str_param('ISL', '0')
+    test_osl = read_str_param('OSL', '500')
+    test_dataset = read_str_param('dataset', 'random')
+    test_dataset_path = read_str_param('dataset_path', '')
+    test_eos = read_str_param('EOS', 'true')
+    test_concurrency = read_json_param('concurrency', '[1, 8, 16, 32, 64, 128]')
+    test_requests = read_str_param('requests', '5')
+
+    def is_valid_model_config(model, total_gpu, tp):
+        if "deepseek" in model.lower() and (total_gpu < 8 or tp < 8):
+            return False, "DeepSeek models require at least 8 GPUs and TP>=8"
+        return True, ""
+
+    def generate_non_pd_configs(base_combo):
+        configs = []
+        model_name = base_combo["model"]
+        possible_tp = [2**i for i in range(int(math.log2(total_gpus)) + 1)]
+        for tp in possible_tp:
+            valid_model, reason = is_valid_model_config(model_name, total_gpus, tp)
+            if not valid_model:
+                continue
+            max_pp = total_gpus // tp
+            for pp in range(1, max_pp + 1):
+                replicas = total_gpus // (tp * pp)
+                if replicas != 1:
+                    continue
+                combo = base_combo.copy()
+                combo.update({"tp": tp, "pp": pp, "replicas": replicas, "pd_enable": False})
+                configs.append(build_final_config(combo))
+        return configs
+
+    def generate_pd_configs(base_combo):
+        gpus_per_prefill_replica = pd_prefill_tp * pd_prefill_pp
+        gpus_per_decode_replica = pd_decode_tp * pd_decode_pp
+        if gpus_per_prefill_replica == 0 or gpus_per_decode_replica == 0:
+            return []
+        base_gpus_per_set = (pd_prefill_replicas * gpus_per_prefill_replica) + (pd_decode_replicas * gpus_per_decode_replica)
+        if base_gpus_per_set == 0:
+            return []
+        scaling_factor = total_gpus // base_gpus_per_set
+        if scaling_factor == 0:
+            return []
+        combo = base_combo.copy()
+        combo.update({"pd_enable": True, "prefill_replicas": pd_prefill_replicas * scaling_factor, "decode_replicas": pd_decode_replicas * scaling_factor})
+        return [build_final_config(combo)]
+
+    def build_final_config(combo):
+        is_pvc_active = pvc_enable
+        is_local_active = not pvc_enable and local_enable
+        dynamic_model_path = combo['local_path'] if is_local_active else combo['model']
+
+        if combo["pd_enable"]:
+            group_size = 2
+        else:
+            group_size = math.ceil((combo['tp'] * combo['pp']) / gpu_per_node) if gpu_per_node > 0 else 1
+        
+        engine_name = combo['engine']
+        mode = "single" if group_size == 1 else "multi"
+        pd_suffix = "-pd" if combo["pd_enable"] else ""
+        helm_name = f"{engine_name}-{mode}{pd_suffix}"
+        model_short_name = combo["model"].split('/')[-1]
+        pd_str = "-pd" if combo["pd_enable"] else ""
+
+        if combo["pd_enable"]:
+            workflow_id = f"{model_short_name}-{combo['engine']}-n{node_size}{pd_str}".replace('.', '-')
+        else:
+            workflow_id = f"{model_short_name}-{combo['engine']}-n{node_size}-tp{combo['tp']}-pp{combo['pp']}-r{combo['replicas']}{pd_str}".replace('.', '-')
+
+        config = {
+            "metadata": {"name": workflow_id, "node_size": node_size, "gpu_per_node": gpu_per_node, "gpu_info": gpu_info},
+            "deploy": {
+                "model": {
+                    "name": combo["model"],
+                    "PVC": {"enable": is_pvc_active, "name": combo.get('pvc_name', '')},
+                    "local": {"enable": is_local_active},
+                    "path": dynamic_model_path
+                },
+                "engine": {"name": combo["engine"], "version": "", "image": ""},
+                "group_size": group_size, "pd": {"enable": combo["pd_enable"]}, "ep_enable": combo["ep_enable"], "args": [], "env": []
+            },
+            "test": {"tokenizer": combo["model"], "ISL": int(test_isl), "OSL": int(test_osl), "dataset": test_dataset, "dataset_path": test_dataset_path, "EOS": str(test_eos).lower() == 'true', "concurrency": test_concurrency, "requests": int(test_requests)},
+            "helm": {"name": helm_name, "version": "", "values": ""}
+        }
+
+        if combo["pd_enable"]:
+            config["deploy"]["pd"].update({
+                "prefill": {"replicas": combo["prefill_replicas"], "tp": pd_prefill_tp, "pp": pd_prefill_pp, "ep_enable": combo["ep_enable"], "args": [], "env": []},
+                "decode": {"replicas": combo["decode_replicas"], "tp": pd_decode_tp, "pp": pd_decode_pp, "ep_enable": combo["ep_enable"], "args": [], "env": []}
+            })
+        else:
+            config["deploy"].update({"replicas": combo["replicas"], "tp": combo["tp"], "pp": combo["pp"]})
+        return config
+
+    all_test_configs = []
+    base_product_iter = itertools.product(models, engines, pd_enable_list, ep_enable_list)
+    for model, engine, pd_on, ep_on in base_product_iter:
+        model_basename = model.split('/')[-1].replace('.', '_')
+        pvc_name_for_model = read_str_param(f"{model_basename}_PVC", "default-ai-model-pvc")
+        local_path_for_model = read_str_param(f"{model_basename}_local", f"/data/{model}")
+        
+        base_combination = {
+            "model": model, 
+            "engine": engine, 
+            "ep_enable": ep_on,
+            "pvc_name": pvc_name_for_model,
+            "local_path": local_path_for_model
+        }
+        
+        if pd_on:
+            all_test_configs.extend(generate_pd_configs(base_combination))
+        else:
+            all_test_configs.extend(generate_non_pd_configs(base_combination))
+
+    final_output = json.dumps(all_test_configs, indent=4)
+    print(final_output)
+
+    try:
+        with open(OUTPUT_FILE_PATH, 'w', encoding='utf-8') as f:
+            f.write(final_output)
+        print(f"Configuration successfully written to {OUTPUT_FILE_PATH}")
+    except IOError as e:
+        print(f"Error writing to file {OUTPUT_FILE_PATH}: {e}")
+
+if __name__ == "__main__":
+    main()

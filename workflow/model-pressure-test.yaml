@@ -3,9 +3,11 @@ kind: Workflow
 metadata:
   generateName: model-pressure-test-
   namespace: default
-spec:
-  serviceAccountName: model-test-runner
-  entrypoint: main
+  volumes:
+  - name: scripts
+    configMap:
+      name: workflow-scripts
+      defaultMode: 0755
   volumes:
   - name: shared-pvc
     persistentVolumeClaim:

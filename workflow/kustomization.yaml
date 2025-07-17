@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# resources:
+# - model-pressure-test.yaml
+# - template/cleanup-operator.yaml
+# - template/consolidate-reports.yaml
+# - template/deploy-model.yaml
+# - template/generate-config.yaml
+# - template/pressure-test-operator.yaml
+# - template/wait-for-resource.yaml
+
+configMapGenerator:
+- name: workflow-scripts
+  files:
+  - scripts/cleanup_resources.sh
+  - scripts/consolidate_reports.py
+  - scripts/deploy_model.py
+  - scripts/generate_config.py
+  - scripts/pressure_test_operator.py
+  - scripts/wait_for_resource.sh
+  options:
+    disableNameSuffixHash: true
