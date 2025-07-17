@@ -3,12 +3,14 @@ kind: Workflow
 metadata:
   generateName: model-pressure-test-
   namespace: default
+spec:
+  entrypoint: main
+  serviceAccountName: model-test-runner
   volumes:
   - name: scripts
     configMap:
       name: workflow-scripts
       defaultMode: 0755
-  volumes:
   - name: shared-pvc
     persistentVolumeClaim:
       claimName: charts-pvc  # 保存 helm chart 
@@ -58,8 +60,9 @@ metadata:
     retryStrategy:
       limit: "{{workflow.parameters.max_retries}}"
       retryPolicy: "Always"
-    steps:
-    - - name: deploy-model
+    dag:
+      tasks:
+      - name: deploy-model
         templateRef:
           name: deploy-model
           template: deploy-model
@@ -74,27 +77,8 @@ metadata:
             value: "{{workflow.parameters.model_timeout}}"
           - name: max_retries
             value: "{{workflow.parameters.max_retries}}"
-
-    # # 等待模型就绪
-    # - - name: wait-model-ready
-    #     templateRef:
-    #       name: wait-resource-operator
-    #       template: wait-for-resource
-    #       clusterScope: true
-    #     arguments:
-    #       parameters:
-    #       - name: resource_type
-    #         value: "statefulset"
-    #       - name: resource_name
-    #         value: "{{steps.deploy-model.outputs.parameters.release_name}}"
-    #       - name: timeout
-    #         value: "{{workflow.parameters.model_timeout}}"
-    #       - name: pre_status
-    #         value: "{{steps.deploy-model.outputs.parameters.status_code}}"
-    #       - name: namespace
-    #         value: "{{workflow.namespace}}"
-
-    - - name: run-pressure-test
+      - name: run-pressure-test
+        dependencies: [deploy-model]
         templateRef:
           name: pressure-test-operator
           template: pressure-test
@@ -104,14 +88,25 @@ metadata:
           - name: configs_json
             value: "{{inputs.parameters.test_config}}"
           - name: values_yaml
-            value: "{{steps.deploy-model.outputs.parameters.values_yaml}}"
+            value: "{{tasks.deploy-model.outputs.parameters.values_yaml}}"
           - name: pre_status
-            value: "{{steps.deploy-model.outputs.parameters.status_code}}"
-            # value: "{{steps.wait-model-ready.outputs.parameters.status_code}}"
+            value: "{{tasks.deploy-model.outputs.parameters.status_code}}"
           - name: release_name
-            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+            value: "{{tasks.deploy-model.outputs.parameters.release_name}}"
+        hooks:
+          exit:
+            template: cleanup
+            arguments:
+              parameters:
+              - name: release_name
+                value: "{{tasks.deploy-model.outputs.parameters.release_name}}"
 
-    - - name: cleanup
+  - name: cleanup
+    inputs:
+      parameters:
+      - name: release_name
+    steps:
+    - - name: call-cleanup-operator
         templateRef:
           name: cleanup-operator
           template: cleanup-resources
@@ -119,10 +114,10 @@ metadata:
         arguments:
           parameters:
           - name: release_name
-            value: "{{steps.deploy-model.outputs.parameters.release_name}}"
+            value: "{{inputs.parameters.release_name}}"
           - name: namespace
             value: "{{workflow.namespace}}"
           - name: cleanup_strategy
-            value: "aggressive" 
+            value: "aggressive"
           - name: delete_pvcs
             value: "false"
