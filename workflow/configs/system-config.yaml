@@ -1,0 +1,10 @@
+# This file contains system-level configurations, such as database credentials.
+# It is mounted into pods that require this information.
+
+database:
+  host: "mysql.example.com"
+  port: "3306"
+  name: "benchmarks"
+  user: "test_user"
+  password: "your_secure_password"
+  table: "pressure_test_results"

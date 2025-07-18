@@ -27,7 +27,10 @@ spec:
     script:
       image: python:3.9-slim
       imagePullPolicy: Always
-      command: [python, /scripts/generate_config.py]
+      command: [sh, -c]
+      source: |
+        pip install pyyaml
+        python /scripts/generate_config.py
       volumeMounts:
       - name: scripts
         mountPath: /scripts

@@ -1,184 +1,146 @@
 import json
-import itertools
 import os
-import math
+import yaml
+import itertools
 
 CONFIG_MAP_MOUNT_PATH = '/etc/test-parameters'
 OUTPUT_FILE_PATH = '/tmp/output'
 
-def read_json_param(param_name, default_value='[]'):
-    file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, param_name)
-    if os.path.exists(file_path):
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-                if not content:
-                    return json.loads(default_value)
-                return json.loads(content)
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"Error decoding JSON from {file_path}: {e}. Returning default value.")
-            return json.loads(default_value)
-    return json.loads(default_value)
+def read_config_from_yaml(file_name, default=None):
+    file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, file_name)
+    if not os.path.exists(file_path):
+        if default is not None: return default
+        raise FileNotFoundError(f"Config file not found: {file_path}")
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f)
+    except (yaml.YAMLError, IOError) as e:
+        print(f"Error reading or parsing YAML from {file_path}: {e}")
+        if default is not None: return default
+        raise
 
-def read_str_param(param_name, default_value=''):
-    file_path = os.path.join(CONFIG_MAP_MOUNT_PATH, param_name)
-    if os.path.exists(file_path):
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read().strip()
-        except IOError as e:
-            print(f"Error reading string from {file_path}: {e}. Returning default value.")
-            return default_value
-    return default_value
+def build_final_config(scenario_combo, common_config):
+    # Deep merge common config with scenario-specific config
+    # Scenario values take precedence. A bit complex for nested dicts.
+    combo = common_config.copy()
+    for key, value in scenario_combo.items():
+        if isinstance(value, dict) and key in combo and isinstance(combo[key], dict):
+            combo[key] = {**combo[key], **value}
+        else:
+            combo[key] = value
 
-def read_int_param(param_name, default_value=0):
-    return int(read_str_param(param_name, str(default_value)))
+    # --- Extract values from the final merged combo ---
+    common_meta = common_config.get('metadata', {})
+    scenario_meta = combo.get('metadata', {})
+    final_meta = {**common_meta, **scenario_meta}
 
-def read_bool_param(param_name, default_value=False):
-    return read_str_param(param_name, str(default_value)).lower() == 'true'
+    node_size = final_meta.get('node_size', 1)
+    gpu_per_node = final_meta.get('gpu_per_node', 8)
+    gpu_info = final_meta.get('gpu_info', 'unknown')
+    
+    model_name = combo['model']
+    engine_name = combo['engine']
+    is_pd_enabled = combo.get('pd_enable', False)
+    
+    # --- Build metadata.name ---
+    scenario_name = combo.get('name', 'unnamed')
+    model_short_name = model_name.split('/')[-1]
+    workflow_id = f"{model_short_name}-{engine_name}-{scenario_name}".replace('.', '-')
+
+    # --- Determine group_size and helm.name ---
+    if is_pd_enabled:
+        group_size = node_size
+    else:
+        tp = combo.get('tp', 1)
+        pp = combo.get('pp', 1)
+        group_size = -(-tp * pp // gpu_per_node) if gpu_per_node > 0 else 1
+    
+    mode = "single" if group_size == 1 else "multi"
+    helm_name = f"{engine_name}-{mode}"
+    if is_pd_enabled:
+        helm_name += "-pd"
+
+    # --- Build final JSON object, adhering to the spec ---
+    common_test_params = common_config.get('test', {})
+    scenario_test_params = combo.get('test', {})
+    final_test_params = {**common_test_params, **scenario_test_params}
+
+    # Construct the final model path
+    base_local_path = combo.get('local_path', '/data/models')
+    final_model_path = os.path.join(base_local_path, model_name)
+
+    config = {
+        "metadata": {"name": workflow_id, "node_size": node_size, "gpu_per_node": gpu_per_node, "gpu_info": gpu_info},
+        "deploy": {
+            "model": {
+                "name": model_name,
+                "PVC": {"enable": combo.get('pvc_enable'), "name": combo.get('pvc_name')},
+                "local": {"enable": combo.get('local_enable')},
+                "path": final_model_path
+            },
+            "engine": {"name": engine_name, "version": "", "image": ""},
+            "group_size": group_size,
+            "pd": {"enable": is_pd_enabled},
+            "ep_enable": combo.get('ep_enable', True),
+            "args": combo.get('args', []),
+            "env": combo.get('env', [])
+        },
+        "test": {
+            "tokenizer": model_name if final_test_params.get('tokenizer_from_model') else final_test_params.get('tokenizer', model_name),
+            "ISL": int(final_test_params.get('isl', 0)),
+            "OSL": int(final_test_params.get('osl', 500)),
+            "dataset": final_test_params.get('dataset', 'random'),
+            "dataset_path": final_test_params.get('dataset_path', ''),
+            "EOS": final_test_params.get('eos', True),
+            "concurrency": final_test_params.get('concurrency', [1, 8, 16]),
+            "requests": int(final_test_params.get('requests', 5))
+        },
+        "helm": {"name": helm_name, "version": "", "values": ""}
+    }
+
+    if is_pd_enabled:
+        config["deploy"]["pd"].update({
+            "prefill": {"replicas": combo.get('pd_prefill_replicas', 1), "tp": combo.get('pd_prefill_tp', 1), "pp": combo.get('pd_prefill_pp', 1), "ep_enable": combo.get('ep_enable', True), "args": [], "env": []},
+            "decode": {"replicas": combo.get('pd_decode_replicas', 1), "tp": combo.get('pd_decode_tp', 1), "pp": combo.get('pd_decode_pp', 1), "ep_enable": combo.get('ep_enable', True), "args": [], "env": []}
+        })
+        config["deploy"].update({"replicas": 0, "tp": 0, "pp": 0})
+    else:
+        config["deploy"].update({"replicas": combo.get('replicas', 1), "tp": combo.get('tp', 1), "pp": combo.get('pp', 1)})
+        
+    return config
 
 def main():
-    # All parameter reading is now safely inside main()
-    node_size = read_int_param('node_size', 1)
-    gpu_per_node = read_int_param('gpu_per_node', 8)
-    gpu_info = read_str_param('gpu_info', 'unknown')
-    total_gpus = node_size * gpu_per_node
-    models = read_json_param('models')
-    engines = read_json_param('engines')
-    pd_enable_list = read_json_param('pd_enable', '[false]')
-    ep_enable_list = read_json_param('ep_enable', '[true]')
-    
-    pvc_enable = read_bool_param('pvc_enable', False)
-    local_enable = read_bool_param('local_enable', True)
+    try:
+        config_data = read_config_from_yaml('test-parameters-config.yaml', default={})
+    except Exception as e:
+        print(f"Error: Could not process config file. {e}")
+        return "[]"
 
-    pd_prefill_replicas = read_int_param('pd_prefill_replicas', 1)
-    pd_decode_replicas = read_int_param('pd_decode_replicas', 1)
-    pd_prefill_tp = read_int_param('pd_prefill_tp', 1)
-    pd_decode_tp = read_int_param('pd_decode_tp', 1)
-    pd_prefill_pp = read_int_param('pd_prefill_pp', 1)
-    pd_decode_pp = read_int_param('pd_decode_pp', 1)
-    test_isl = read_str_param('ISL', '0')
-    test_osl = read_str_param('OSL', '500')
-    test_dataset = read_str_param('dataset', 'random')
-    test_dataset_path = read_str_param('dataset_path', '')
-    test_eos = read_str_param('EOS', 'true')
-    test_concurrency = read_json_param('concurrency', '[1, 8, 16, 32, 64, 128]')
-    test_requests = read_str_param('requests', '5')
-
-    # All helper functions are defined within main's scope
-    def is_valid_model_config(model, total_gpu, tp):
-        if "deepseek" in model.lower() and (total_gpu < 8 or tp < 8):
-            return False, "DeepSeek models require at least 8 GPUs and TP>=8"
-        return True, ""
-
-    def generate_non_pd_configs(base_combo):
-        configs = []
-        model_name = base_combo["model"]
-        possible_tp = [2**i for i in range(int(math.log2(total_gpus)) + 1)]
-        for tp in possible_tp:
-            valid_model, reason = is_valid_model_config(model_name, total_gpus, tp)
-            if not valid_model:
-                continue
-            max_pp = total_gpus // tp
-            possible_pp = [2**i for i in range(int(math.log2(max_pp)) + 1)] if max_pp > 0 else []
-            for pp in possible_pp:
-                replicas = total_gpus // (tp * pp)
-                combo = base_combo.copy()
-                combo.update({"tp": tp, "pp": pp, "replicas": replicas, "pd_enable": False})
-                configs.append(build_final_config(combo))
-        return configs
-
-    def generate_pd_configs(base_combo):
-        gpus_per_prefill_replica = pd_prefill_tp * pd_prefill_pp
-        gpus_per_decode_replica = pd_decode_tp * pd_decode_pp
-        if gpus_per_prefill_replica == 0 or gpus_per_decode_replica == 0:
-            return []
-        base_gpus_per_set = (pd_prefill_replicas * gpus_per_prefill_replica) + (pd_decode_replicas * gpus_per_decode_replica)
-        if base_gpus_per_set == 0:
-            return []
-        scaling_factor = total_gpus // base_gpus_per_set
-        if scaling_factor == 0:
-            return []
-        combo = base_combo.copy()
-        combo.update({"pd_enable": True, "prefill_replicas": pd_prefill_replicas * scaling_factor, "decode_replicas": pd_decode_replicas * scaling_factor})
-        return [build_final_config(combo)]
-
-    def build_final_config(combo):
-        is_pvc_active = pvc_enable
-        is_local_active = not pvc_enable and local_enable
-        dynamic_model_path = combo['local_path'] if is_local_active else combo['model']
-
-        if combo["pd_enable"]:
-            group_size = 2
-        else:
-            group_size = math.ceil((combo['tp'] * combo['pp']) / gpu_per_node) if gpu_per_node > 0 else 1
-        
-        engine_name = combo['engine']
-        mode = "single" if group_size == 1 else "multi"
-        pd_suffix = "-pd" if combo["pd_enable"] else ""
-        helm_name = f"{engine_name}-{mode}{pd_suffix}"
-        model_short_name = combo["model"].split('/')[-1]
-        pd_str = "-pd" if combo["pd_enable"] else ""
-
-        if combo["pd_enable"]:
-            workflow_id = f"{model_short_name}-{combo['engine']}-n{node_size}{pd_str}".replace('.', '-')
-        else:
-            workflow_id = f"{model_short_name}-{combo['engine']}-n{node_size}-tp{combo['tp']}-pp{combo['pp']}-r{combo['replicas']}{pd_str}".replace('.', '-')
-
-        config = {
-            "metadata": {"name": workflow_id, "node_size": node_size, "gpu_per_node": gpu_per_node, "gpu_info": gpu_info},
-            "deploy": {
-                "model": {
-                    "name": combo["model"],
-                    "PVC": {"enable": is_pvc_active, "name": combo.get('pvc_name', '')},
-                    "local": {"enable": is_local_active},
-                    "path": dynamic_model_path
-                },
-                "engine": {"name": combo["engine"], "version": "", "image": ""},
-                "group_size": group_size, "pd": {"enable": combo["pd_enable"]}, "ep_enable": combo["ep_enable"], "args": [], "env": []
-            },
-            "test": {"tokenizer": combo["model"], "ISL": int(test_isl), "OSL": int(test_osl), "dataset": test_dataset, "dataset_path": test_dataset_path, "EOS": str(test_eos).lower() == 'true', "concurrency": test_concurrency, "requests": int(test_requests)},
-            "helm": {"name": helm_name, "version": "", "values": ""}
-        }
-
-        if combo["pd_enable"]:
-            config["deploy"]["pd"].update({
-                "prefill": {"replicas": combo["prefill_replicas"], "tp": pd_prefill_tp, "pp": pd_prefill_pp, "ep_enable": combo["ep_enable"], "args": [], "env": []},
-                "decode": {"replicas": combo["decode_replicas"], "tp": pd_decode_tp, "pp": pd_decode_pp, "ep_enable": combo["ep_enable"], "args": [], "env": []}
-            })
-            # Add placeholder keys for structural consistency in PD mode
-            config["deploy"].update({"replicas": 0, "tp": 0, "pp": 0})
-        else:
-            config["deploy"].update({"replicas": combo["replicas"], "tp": combo["tp"], "pp": combo["pp"]})
-        return config
-
-    # This is the original core logic, now correctly placed inside main
+    common_config = config_data.get('common', {})
+    scenarios = config_data.get('scenarios', [])
     all_test_configs = []
-    base_product_iter = itertools.product(models, engines, pd_enable_list, ep_enable_list)
-    for model, engine, pd_on, ep_on in base_product_iter:
-        model_basename = model.split('/')[-1].replace('.', '_')
-        pvc_name_for_model = read_str_param(f"{model_basename}_PVC", "default-ai-model-pvc")
-        local_path_for_model = read_str_param(f"{model_basename}_local", f"/data/{model}")
-        
-        base_combination = {
-            "model": model, 
-            "engine": engine, 
-            "ep_enable": ep_on,
-            "pvc_name": pvc_name_for_model,
-            "local_path": local_path_for_model
-        }
-        
-        if pd_on:
-            all_test_configs.extend(generate_pd_configs(base_combination))
-        else:
-            all_test_configs.extend(generate_non_pd_configs(base_combination))
+
+    for scenario in scenarios:
+        # Determine the final list of models and engines for this scenario
+        if 'model' in scenario and 'engine' in scenario: # Case 3: single string override
+            models_to_run = [scenario['model']]
+            engines_to_run = [scenario['engine']]
+        else: # Case 1 & 2: list-based
+            models_to_run = scenario.get('models', common_config.get('models', []))
+            engines_to_run = scenario.get('engines', common_config.get('engines', []))
+
+        for model, engine in itertools.product(models_to_run, engines_to_run):
+            # Important: The final combo for building the config starts with the scenario,
+            # then adds the specific model and engine for this iteration.
+            scenario_combo = {**scenario, "model": model, "engine": engine}
+            final_config = build_final_config(scenario_combo, common_config)
+            all_test_configs.append(final_config)
 
     return json.dumps(all_test_configs, indent=4)
 
 if __name__ == "__main__":
     final_output = main()
     print(final_output)
-
     try:
         with open(OUTPUT_FILE_PATH, 'w', encoding='utf-8') as f:
             f.write(final_output)

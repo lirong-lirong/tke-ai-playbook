@@ -20,5 +20,14 @@ configMapGenerator:
   - scripts/pressure_test_operator.py
   - scripts/wait_for_resource.sh
   - scripts/to_mysql.py
+  - scripts/tests/test_generate_config.py
+  - scripts/__init__.py
+  - scripts/tests/__init__.py
+- name: test-parameters-config
+  files:
+  - configs/test-parameters-config.yaml
+- name: system-config
+  files:
+  - configs/system-config.yaml
   options:
     disableNameSuffixHash: true

@@ -23,6 +23,9 @@ spec:
   - name: test-parameters-config # 定义测试参数
     configMap:
       name: test-parameters-config
+  - name: system-config
+    configMap:
+      name: system-config
 
   arguments:
     parameters:

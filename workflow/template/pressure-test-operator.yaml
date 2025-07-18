@@ -42,8 +42,8 @@ spec:
         mountPath: /scripts
       - name: shared-pvc
         mountPath: /shared-data
-      - name: model-pvc-map
-        mountPath: /etc/config/model-pvc-map
+      - name: system-config
+        mountPath: /etc/system-config
       - name: test-parameters-config
         mountPath: /etc/test-parameters
       - name: dataset-pvc

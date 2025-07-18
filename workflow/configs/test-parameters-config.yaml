@@ -1,76 +1,72 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: test-parameters-config
-  namespace: default
-data:
-  # ======================================================
-  #         Cluster & Hardware Configuration
-  # ======================================================
-  node_size: '1'
-  gpu_per_node: '8'
-  gpu_info: "H20-96G"
+# This file defines the test scenarios for the model pressure test workflow.
 
-  # ======================================================
-  #               Model & Engine Selection
-  # ======================================================
-  models: '["Qwen/Qwen3-32B"]' # Models to test. , "deepseek-ai/DeepSeek-V3-0324"
-  engines: '["sglang"]' # Inference engines to test
+# Common parameters that are shared across all scenarios.
+common:
+  metadata:
+    gpu_info: "A100-80G"
+    node_size: 1
+    gpu_per_node: 8
+  
+  # Default model and engine lists for cartesian product.
+  # A scenario can override these lists.
+  models: 
+    - "Qwen/Qwen3-32B"
+    - "deepseek-ai/DeepSeek-V3-0324"
+  engines: 
+    - "sglang"
+    # - "vllm"
 
-  # ======================================================
-  #        Inference Configuration Switches
-  # ======================================================
-  # List of booleans to control whether to generate configs
-  # for Pipeline Disaggregation (PD) mode.
-  pd_enable: '[false]' # , true
-  ep_enable: '[false]'
-  pvc_enable: 'false'
-    # model_basename + '_PVC'
-  DeepSeek-V3-0324_PVC: 'pvc-for-deepseek-v3'
-  local_enable: 'true'
-  local_path: '/data0/'
-  Qwen3-32B_local: '/data0/Qwen/Qwen3-32B'
+  # Storage configurations
+  pvc_enable: false
+  local_enable: true
+  pvc_name: "default-ai-model-pvc"
+  local_path: "/data0/"
 
-  # ======================================================
-  #      PD (Pipeline Disaggregation) Parameters
-  # These are only used when a 'pd_enable: true' config is generated.
-  # The script will scale replicas to maximize GPU usage.
-  # ======================================================
-  pd_prefill_replicas: '1' # Base replica count for prefill stage
-  pd_decode_replicas: '1'  # Base replica count for decode stage
-  pd_prefill_tp: '8'
-  pd_decode_tp: '8'
-  pd_prefill_pp: '1'
-  pd_decode_pp: '1'
+  # Common test parameters
+  test:
+    tokenizer_from_model: true # If true, tokenizer path will be the same as model name
+    isl: 1024
+    osl: 2048
+    dataset: "random"
+    dataset_path: ""
+    eos: true
+    concurrency: [1, 8, 16, 32, 64, 128]
+    requests: 5
 
-  # ======================================================
-  #               Test Load Parameters
-  # ======================================================
-  ISL: '2000'
-  OSL: '500'
-  EOS: 'true'
-  requests: '5'
-  concurrency: '[1, 2, 4, 16, 32, 40, 64, 80, 100, 128, 150, 200]'
+# A list of specific test scenarios to execute.
+scenarios:
+  # Scenario 1: A standard non-PD regression test for 16 GPUs.
+  # It will use the common models and engines, generating 2*2=4 configs.
+  - name: "regression-16g-non-pd"
+    pd_enable: false
+    node_size: 2
+    gpu_per_node: 8
+    tp: 8
+    pp: 2
+    replicas: 1
 
-  # ======================================================
-  #               Dataset Configuration
-  # ======================================================
-  dataset: 'random' # Type of dataset ('random' or 'custom')
-  dataset_path: 'prompts.jsonl' # Path to custom dataset file if used
+  # Scenario 2: A specific test for Llama3 on vLLM with a different TP/PP split.
+  # It overrides the common models/engines lists.
+  - name: "llama3-vllm-tp4-pp4"
+    models: ["meta-llama/Llama-3-8B-Instruct"]
+    engines: ["vllm"]
+    pd_enable: false
+    node_size: 2
+    gpu_per_node: 8
+    tp: 4
+    pp: 4
+    replicas: 1
 
-  # ======================================================
-  #      (Optional) Fields for other scripts
-  # These are not used by generate-config.py but can be kept for other purposes
-  # ======================================================
-  # service: '"llm-service-endpoint"'
-  # service_port: '40000'
-  # db_host: "129.226.53.35"
-  # db_port: '3306'
-
-
-  db_host: "127.0.0.1"
-  db_port: '3306'
-  db_name: "db"
-  db_user: "user"
-  db_password: "pass"
-  db_table: "workflow-test"
+  # Scenario 3: A PD-Disaggregation test for DeepSeek on sglang.
+  - name: "deepseek-sglang-pd"
+    models: ["deepseek-ai/DeepSeek-V2-Chat"]
+    engines: ["sglang"]
+    pd_enable: true
+    node_size: 2
+    gpu_per_node: 8
+    pd_prefill_replicas: 1
+    pd_decode_replicas: 2
+    pd_prefill_tp: 4
+    pd_decode_tp: 2
+    pd_prefill_pp: 1
+    pd_decode_pp: 2

@@ -8,11 +8,11 @@ from to_mysql import DatabaseArgs, save_benchmark_results_to_db
 
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    CONFIG_MAP_MODEL_PVC_PATH = "/etc/test-parameters"
+    SYSTEM_CONFIG_PATH = "/etc/system-config"
     STATUS_CODE_FILE = '/tmp/status_code'
 
-    def read_configmap(param_name, default_value=''):
-        file_path = os.path.join(CONFIG_MAP_MODEL_PVC_PATH, param_name)
+    def read_system_config(param_name, default_value=''):
+        file_path = os.path.join(SYSTEM_CONFIG_PATH, param_name)
         if os.path.exists(file_path):
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
@@ -45,19 +45,33 @@ def main():
         print(f"Error decoding input JSON: {e}")
         sys.exit(1)
 
-    DB_HOST = read_configmap('db_host', default_value=os.getenv('DB_HOST', ''))
-    db_enabled = bool(DB_HOST)
+    db_enabled = False
     db_connection_args = None
+    db_config_path = os.path.join(SYSTEM_CONFIG_PATH, 'system-config.yaml') # Correct filename
+    if os.path.exists(db_config_path):
+        try:
+            import yaml
+            with open(db_config_path, 'r') as f:
+                db_config = yaml.safe_load(f).get('database', {})
+            
+            db_host = db_config.get('host')
+            if db_host:
+                db_enabled = True
+                db_connection_args = DatabaseArgs(
+                    db_host=db_host,
+                    db_port=db_config.get('port', '3306'),
+                    db_name=db_config.get('name', 'db'),
+                    db_user=db_config.get('user', 'user'),
+                    db_password=db_config.get('password', 'passwd'),
+                    db_table_name=db_config.get('table', 'test_table'),
+                )
+        except (ImportError, yaml.YAMLError, IOError) as e:
+            logging.info(f"Could not read or parse database config, DB push disabled: {e}")
+            
     if db_enabled:
-        db_connection_args = DatabaseArgs(
-            db_host=DB_HOST,
-            db_port=read_configmap('db_port', default_value=os.getenv('DB_PORT', '3306')),
-            db_name=read_configmap('db_name', default_value=os.getenv('DB_NAME', 'db')),
-            db_user=read_configmap('db_user', default_value=os.getenv('DB_USER', 'user')),
-            db_password=read_configmap('db_password', default_value=os.getenv('DB_PASS', 'passwd')),
-            db_table_name=read_configmap('db_table', default_value=os.environ.get('DB_TABLE', 'test_table')),
-        )
-
+        logging.info(f"Using Database")
+    else:
+        logging.info(f"Database disabled")
     test_cfg = config_data.get('test', {})
     deploy_cfg = config_data.get('deploy', {})
     concurrency_list = test_cfg.get('concurrency', [])
