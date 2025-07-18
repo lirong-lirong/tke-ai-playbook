@@ -1,0 +1,131 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: {{ include "helm.fullname" . }}
+  labels:
+    {{- include "helm.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.leaderWorkerSet.replicas }}
+  leaderWorkerTemplate:
+    size: {{ .Values.multiNode.groupSize }}
+    restartPolicy: {{ .Values.leaderWorkerSet.restartPolicy }}
+    leaderTemplate:
+      metadata:
+        labels:
+          {{- include "helm.selectorLabels" . | nindent 10 }}
+          role: leader
+      spec:
+        containers:
+          - name: {{ include "helm.fullname" . }}-leader
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            env:
+              {{- toYaml .Values.server.env | nindent 14 }}
+            command: ["bash", "-c"]
+            args:
+              - |
+                python3 -m sglang.launch_server \
+                  --model-path /{{ .Values.model.name }} \
+                  --tp {{ .Values.server.args.tpSize }} \
+                  --pp {{ .Values.server.args.ppSize }} \
+                  --dist-init-addr $(LWS_LEADER_ADDRESS):20000 \
+                  --nnodes $(LWS_GROUP_SIZE) \
+                  --node-rank $(LWS_WORKER_INDEX) \
+                  {{- if .Values.server.args.epEnabled }}
+                  --enable-expert-parallel \
+                  {{- end }}
+                  {{- .Values.server.extraArgs }} \
+                  --trust-remote-code \
+                  --host 0.0.0.0 \
+                  --port 60000
+            resources:
+              limits:
+                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+              requests:
+                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+            ports:
+              - containerPort: 60000
+            volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            {{- if .Values.model.pvc.enabled }}
+            - name: model
+              mountPath: /{{ .Values.model.name }}
+              subPath: {{ .Values.model.pvc.path }}
+            {{- else if .Values.model.local.enabled }}
+            - name: model
+              mountPath: /{{ .Values.model.name }}
+            {{- end }}
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 256Gi
+          {{- if .Values.model.pvc.enabled }}
+          - name: model
+            persistentVolumeClaim:
+              claimName: {{ .Values.model.pvc.name }}
+          {{- else if .Values.model.local.enabled }}
+          - name: model
+            hostPath:
+              path: {{ .Values.model.local.path }}
+          {{- end }}
+    workerTemplate:
+      metadata:
+        labels:
+          {{- include "helm.selectorLabels" . | nindent 10 }}
+      spec:
+        containers:
+          - name: {{ include "helm.fullname" . }}-worker
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            env:
+              {{- toYaml .Values.server.env | nindent 14 }}
+            command: ["bash", "-c"]
+            args:
+              - |
+                python3 -m sglang.launch_server \
+                  --model-path /{{ .Values.model.name }} \
+                  --tp {{ .Values.server.args.tpSize }} \
+                  --pp {{ .Values.server.args.ppSize }} \
+                  --dist-init-addr $(LWS_LEADER_ADDRESS):20000 \
+                  --nnodes $(LWS_GROUP_SIZE) \
+                  --node-rank $(LWS_WORKER_INDEX) \
+                  {{- if .Values.server.args.epEnabled }}
+                  --enable-expert-parallel \
+                  {{- end }}
+                  {{- .Values.server.extraArgs }} \
+                  --trust-remote-code \
+                  --host 0.0.0.0 \
+                  --port 60000
+            resources:
+              limits:
+                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+              requests:
+                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+            volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            {{- if .Values.model.pvc.enabled }}
+            - name: model
+              mountPath: /{{ .Values.model.name }}
+              subPath: {{ .Values.model.pvc.path }}
+            {{- else if .Values.model.local.enabled }}
+            - name: model
+              mountPath: /{{ .Values.model.name }}
+            {{- end }}
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 256Gi
+          {{- if .Values.model.pvc.enabled }}
+          - name: model
+            persistentVolumeClaim:
+              claimName: {{ .Values.model.pvc.name }}
+          {{- else if .Values.model.local.enabled }}
+          - name: model
+            hostPath:
+              path: {{ .Values.model.local.path }}
+          {{- end }}
+

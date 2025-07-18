@@ -1,0 +1,61 @@
+# Default values for sglang-multi.
+
+# LeaderWorkerSet Configuration
+leaderWorkerSet:
+  replicas: 1
+  restartPolicy: RecreateGroupOnPodRestart
+
+# Image Configuration
+image:
+  repository: ccr.ccs.tencentyun.com/tke-ai-playbook/sglang
+  tag: nightly
+  pullPolicy: IfNotPresent
+
+# Model Configuration
+model:
+  pvc:
+    enabled: false
+    name: "default-model-pvc"
+    path: ""
+  local:
+    enabled: true
+    path: "/data0/models"
+  name: ""
+
+# Multi-Node Deployment Configuration
+multiNode:
+  groupSize: 2
+
+# SGLang Server Arguments
+server:
+  resources:
+    gpu: 8
+server:
+  args:
+    tpSize: 8
+    ppSize: 1
+    epEnabled: false
+    memFractionStatic: 0.85
+    trustRemoteCode: true
+  extraArgs: ""
+
+  # Environment variables
+  env:
+    - name: NCCL_IB_CUDA_SUPPORT
+      value: "1"
+    - name: NCCL_IB_DISABLE
+      value: "0"
+    - name: NCCL_IB_GID_INDEX
+      value: "3"
+    - name: NCCL_DEBUG
+      value: INFO
+    - name: GLOO_SOCKET_IFNAME
+      value: eth0
+    - name: NCCL_SOCKET_IFNAME
+      value: eth0
+
+# Service Configuration
+service:
+  enabled: true
+  type: LoadBalancer
+  port: 60000

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# This script generates a values.yaml file for the sglang-single Helm chart
+# This script generates a values.yaml file for the sglang-multi Helm chart
 # based on a standardized JSON input file.
 
 # Usage: ./generate-values.sh <path_to_config.json>
@@ -26,24 +26,35 @@ MODEL_PATH_IN_PVC=$(jq -r '.deploy.model.path // ""' "$CONFIG_FILE")
 LOCAL_ENABLED=$(jq -r '.deploy.model.local.enable // false' "$CONFIG_FILE")
 LOCAL_PATH=$(jq -r '.deploy.model.path // ""' "$CONFIG_FILE")
 
-REPLICAS=$(jq -r '.deploy.replicas // 1' "$CONFIG_FILE")
-# IMAGE=$(jq -r '.deploy.engine.image // "sglang-default-image"' "$CONFIG_FILE")
-TP_SIZE=$(jq -r '.deploy.tp // 1' "$CONFIG_FILE")
-PP_SIZE=$(jq -r '.deploy.pp // 1' "$CONFIG_FILE")
-
-# Calculate the exact number of GPUs required
-REQUIRED_GPUS=$((TP_SIZE * PP_SIZE))
-
+GROUP_SIZE=$(jq -r '.deploy.group_size // 2' "$CONFIG_FILE")
+TP_SIZE=$(jq -r '.deploy.tp // 8' "$CONFIG_FILE")
+PP_SIZE=$(jq -r '.deploy.pp // 2' "$CONFIG_FILE")
 EP_ENABLED=$(jq -r '.deploy.ep_enable // false' "$CONFIG_FILE")
-GPU_PER_NODE=$(jq -r '.metadata.gpu_per_node // 1' "$CONFIG_FILE")
+
+# Calculate the exact number of GPUs required per pod
+if [ "$GROUP_SIZE" -eq 0 ]; then
+  echo "Error: group_size cannot be zero." >&2
+  exit 1
+fi
+REQUIRED_GPUS=$((TP_SIZE * PP_SIZE / GROUP_SIZE))
 
 ENV_YAML=$(jq -r '.deploy.env | .[]? | "- name: \(. | split("=")[0])\n  value: \"\(. | split("=")[1])\""' "$CONFIG_FILE")
-EXTRA_ARGS=$(jq -r '.deploy.args | .[]? | join(" ")' "$CONFIG_FILE")
+EXTRA_ARGS=$(jq -r '.deploy.args | .[]? | @sh' "$CONFIG_FILE" | tr '\n' ' ')
 
 # --- Generate values.yaml content ---
 cat <<EOF
+# Default values for sglang-multi.
+
+leaderWorkerSet:
+  replicas: 1
+  restartPolicy: RecreateGroupOnPodRestart
+
+image:
+  repository: ccr.ccs.tencentyun.com/tke-ai-playbook/sglang
+  tag: nightly
+  pullPolicy: IfNotPresent
+
 model:
-  name: "$MODEL_NAME"
   pvc:
     enabled: $PVC_ENABLED
     name: "$PVC_NAME"
@@ -51,22 +62,21 @@ model:
   local:
     enabled: $LOCAL_ENABLED
     path: "$LOCAL_PATH"
+  name: "$MODEL_NAME"
+
+multiNode:
+  groupSize: $GROUP_SIZE
 
 server:
-  replicas: $REPLICAS
-  image: "ccr.ccs.tencentyun.com/tke-ai-playbook/sglang:nightly"
-  imagePullPolicy: IfNotPresent
   resources:
-    requests:
-      nvidia.com/gpu: $REQUIRED_GPUS
-    limits:
-      nvidia.com/gpu: $REQUIRED_GPUS
+    gpu: $REQUIRED_GPUS
   args:
     tpSize: $TP_SIZE
     ppSize: $PP_SIZE
     epEnabled: $EP_ENABLED
-  extraArgs:
-    $EXTRA_ARGS
+    memFractionStatic: 0.85
+    trustRemoteCode: true
+  extraArgs: "$EXTRA_ARGS"
   env:
     - name: NCCL_IB_CUDA_SUPPORT
       value: "1"
@@ -81,8 +91,9 @@ server:
     - name: NCCL_SOCKET_IFNAME
       value: eth0
     $ENV_YAML
-  service:
-    enabled: true
-    type: LoadBalancer
-    port: 60000
+
+service:
+  enabled: true
+  type: LoadBalancer
+  port: 60000
 EOF
