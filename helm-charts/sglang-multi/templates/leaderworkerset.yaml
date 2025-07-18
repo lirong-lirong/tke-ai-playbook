@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "helm.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.leaderWorkerSet.replicas }}
+  replicas: {{ .Values.server.replicas }}
   leaderWorkerTemplate:
     size: {{ .Values.multiNode.groupSize }}
     restartPolicy: {{ .Values.leaderWorkerSet.restartPolicy }}
@@ -17,10 +17,12 @@ spec:
       spec:
         containers:
           - name: {{ include "helm.fullname" . }}-leader
-            image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            image: {{ .Values.server.image }}
+            imagePullPolicy: {{ .Values.server.pullPolicy }}
+            {{- if $.Values.server.env }}
             env:
               {{- toYaml .Values.server.env | nindent 14 }}
+            {{- end }}
             command: ["bash", "-c"]
             args:
               - |
@@ -32,17 +34,19 @@ spec:
                   --nnodes $(LWS_GROUP_SIZE) \
                   --node-rank $(LWS_WORKER_INDEX) \
                   {{- if .Values.server.args.epEnabled }}
-                  --enable-expert-parallel \
+                  --enable-ep-moe \
                   {{- end }}
-                  {{- .Values.server.extraArgs }} \
+                  {{- range .Values.server.args.extraArgs }}
+                  {{ . }} \
+                  {{- end }}
                   --trust-remote-code \
                   --host 0.0.0.0 \
                   --port 60000
             resources:
               limits:
-                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+                nvidia.com/gpu: {{ .Values.server.resources.gpu }}
               requests:
-                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+                nvidia.com/gpu: {{ .Values.server.resources.gpu }}
             ports:
               - containerPort: 60000
             volumeMounts:
@@ -77,10 +81,12 @@ spec:
       spec:
         containers:
           - name: {{ include "helm.fullname" . }}-worker
-            image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            image: {{ .Values.server.image }}
+            imagePullPolicy: {{ .Values.server.pullPolicy }}
+            {{- if .Values.server.env }}
             env:
               {{- toYaml .Values.server.env | nindent 14 }}
+            {{- end }}
             command: ["bash", "-c"]
             args:
               - |
@@ -92,12 +98,14 @@ spec:
                   --nnodes $(LWS_GROUP_SIZE) \
                   --node-rank $(LWS_WORKER_INDEX) \
                   {{- if .Values.server.args.epEnabled }}
-                  --enable-expert-parallel \
+                  --enable-ep-moe \
                   {{- end }}
-                  {{- .Values.server.extraArgs }} \
+                  {{- range .Values.server.args.extraArgs }}
+                  {{ . }} \
+                  {{- end }}
                   --trust-remote-code \
                   --host 0.0.0.0 \
-                  --port 60000
+                  --port $((60000 + LWS_WORKER_INDEX))
             resources:
               limits:
                 nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"

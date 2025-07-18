@@ -3,41 +3,38 @@
 # LeaderWorkerSet Configuration
 leaderWorkerSet:
   replicas: 1
-  restartPolicy: RecreateGroupOnPodRestart
-
-# Image Configuration
-image:
-  repository: ccr.ccs.tencentyun.com/tke-ai-playbook/sglang
-  tag: nightly
-  pullPolicy: IfNotPresent
+  restartPolicy: None # RecreateGroupOnPodRestart
 
 # Model Configuration
 model:
+  name: "Qwen/Qwen3-32B"
   pvc:
     enabled: false
     name: "default-model-pvc"
     path: ""
   local:
     enabled: true
-    path: "/data0/models"
-  name: ""
-
+    path: "/data0/Qwen/Qwen3-32B"
+  
 # Multi-Node Deployment Configuration
 multiNode:
   groupSize: 2
 
 # SGLang Server Arguments
 server:
+  replicas: 1
+  restartPolicy: None # RecreateGroupOnPodRestart
+  image: "ccr.ccs.tencentyun.com/tke-ai-playbook/sglang:nightly"
+  imagePullPolicy: IfNotPresent
   resources:
-    gpu: 8
-server:
+    gpu: 4
   args:
-    tpSize: 8
+    tpSize: 4
     ppSize: 1
     epEnabled: false
     memFractionStatic: 0.85
     trustRemoteCode: true
-  extraArgs: ""
+  extraArgs:
 
   # Environment variables
   env:

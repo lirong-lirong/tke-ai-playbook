@@ -38,7 +38,7 @@ EP_ENABLED=$(jq -r '.deploy.ep_enable // false' "$CONFIG_FILE")
 GPU_PER_NODE=$(jq -r '.metadata.gpu_per_node // 1' "$CONFIG_FILE")
 
 ENV_YAML=$(jq -r '.deploy.env | .[]? | "- name: \(. | split("=")[0])\n  value: \"\(. | split("=")[1])\""' "$CONFIG_FILE")
-EXTRA_ARGS=$(jq -r '.deploy.args | .[]? | join(" ")' "$CONFIG_FILE")
+EXTRA_ARGS=$(jq -r '.deploy.args | .[]? | "- \"\(. | tostring)\""' "$CONFIG_FILE")
 
 # --- Generate values.yaml content ---
 cat <<EOF
@@ -66,7 +66,8 @@ server:
     ppSize: $PP_SIZE
     epEnabled: $EP_ENABLED
   extraArgs:
-    $EXTRA_ARGS
+$(echo "$EXTRA_ARGS" | sed 's/^/    /')
+
   env:
     - name: NCCL_IB_CUDA_SUPPORT
       value: "1"
@@ -80,9 +81,10 @@ server:
       value: eth0
     - name: NCCL_SOCKET_IFNAME
       value: eth0
-    $ENV_YAML
-  service:
-    enabled: true
-    type: LoadBalancer
-    port: 60000
+$(echo "$ENV_YAML" | sed 's/^/    /')
+
+service:
+  enabled: true
+  type: LoadBalancer
+  port: 60000
 EOF
