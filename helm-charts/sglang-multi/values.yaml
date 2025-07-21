@@ -7,14 +7,14 @@ leaderWorkerSet:
 
 # Model Configuration
 model:
-  name: "Qwen/Qwen3-32B"
+  name: "deepseek-ai/DeepSeek-V3-0324"
   pvc:
     enabled: false
     name: "default-model-pvc"
     path: ""
   local:
     enabled: true
-    path: "/data0/Qwen/Qwen3-32B"
+    path: "/data0/deepseek-ai/DeepSeek-V3-0324"
   
 # Multi-Node Deployment Configuration
 multiNode:
@@ -24,15 +24,16 @@ multiNode:
 server:
   replicas: 1
   restartPolicy: None # RecreateGroupOnPodRestart
-  image: "ccr.ccs.tencentyun.com/tke-ai-playbook/sglang:nightly"
+  # image: "ccr.ccs.tencentyun.com/tke-ai-playbook/sglang:nightly"
+  image: "fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang:v0.4.8-cu126"
   imagePullPolicy: IfNotPresent
   resources:
-    gpu: 4
+    gpu: 8
   args:
-    tpSize: 4
+    tpSize: 16
     ppSize: 1
     epEnabled: false
-    memFractionStatic: 0.85
+    memFractionStatic: 0.80
     trustRemoteCode: true
   extraArgs:
 

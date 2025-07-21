@@ -15,10 +15,15 @@ spec:
           {{- include "helm.selectorLabels" . | nindent 10 }}
           role: leader
       spec:
+        dnsPolicy: ClusterFirstWithHostNet
+        hostNetwork: true
+        hostIPC: true
         containers:
           - name: {{ include "helm.fullname" . }}-leader
             image: {{ .Values.server.image }}
             imagePullPolicy: {{ .Values.server.pullPolicy }}
+            securityContext:
+              privileged: true
             {{- if $.Values.server.env }}
             env:
               {{- toYaml .Values.server.env | nindent 14 }}
@@ -36,12 +41,13 @@ spec:
                   {{- if .Values.server.args.epEnabled }}
                   --enable-ep-moe \
                   {{- end }}
+                  --trust-remote-code \
+                  --host 0.0.0.0 \
+                  --port 60000 \
+                  --mem-fraction-static {{ .Values.server.args.memFractionStatic}} \
                   {{- range .Values.server.args.extraArgs }}
                   {{ . }} \
                   {{- end }}
-                  --trust-remote-code \
-                  --host 0.0.0.0 \
-                  --port 60000
             resources:
               limits:
                 nvidia.com/gpu: {{ .Values.server.resources.gpu }}
@@ -49,6 +55,31 @@ spec:
                 nvidia.com/gpu: {{ .Values.server.resources.gpu }}
             ports:
               - containerPort: 60000
+              - containerPort: 20000
+            startupProbe:
+              httpGet:
+                path: /health
+                port: 60000
+                scheme: HTTP
+              timeoutSeconds: 3
+              periodSeconds: 10
+              failureThreshold: 360
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: 60000
+                scheme: HTTP
+              timeoutSeconds: 3
+              periodSeconds: 10
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: 60000
+                scheme: HTTP
+              timeoutSeconds: 3
+              periodSeconds: 10
+              failureThreshold: 3
             volumeMounts:
             - name: dshm
               mountPath: /dev/shm
@@ -79,10 +110,15 @@ spec:
         labels:
           {{- include "helm.selectorLabels" . | nindent 10 }}
       spec:
+        dnsPolicy: ClusterFirstWithHostNet
+        hostNetwork: true
+        hostIPC: true
         containers:
           - name: {{ include "helm.fullname" . }}-worker
             image: {{ .Values.server.image }}
             imagePullPolicy: {{ .Values.server.pullPolicy }}
+            securityContext:
+              privileged: true
             {{- if .Values.server.env }}
             env:
               {{- toYaml .Values.server.env | nindent 14 }}
@@ -100,12 +136,13 @@ spec:
                   {{- if .Values.server.args.epEnabled }}
                   --enable-ep-moe \
                   {{- end }}
+                  --trust-remote-code \
+                  --host 0.0.0.0 \
+                  --port 60000 \
+                  --mem-fraction-static 0.8 \
                   {{- range .Values.server.args.extraArgs }}
                   {{ . }} \
                   {{- end }}
-                  --trust-remote-code \
-                  --host 0.0.0.0 \
-                  --port $((60000 + LWS_WORKER_INDEX))
             resources:
               limits:
                 nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
