@@ -1,0 +1,100 @@
+# Default values for sglang-multi-pd.
+
+# Model Configuration
+model:
+  name: "deepseek-ai/DeepSeek-V3-0324"
+  path: "/data0/deepseek-ai/DeepSeek-V3-0324"
+  pvc:
+    enabled: false
+    name: "default-model-pvc"
+    path: ""
+  local:
+    enabled: true
+    path: "/data0/deepseek-ai/DeepSeek-V3-0324"
+
+# PD Separation Configuration
+pd:
+  enabled: true
+  transferBackend: "nixl"
+
+# Load Balancer Configuration
+loadBalancer:
+  replicas: 1
+  image: "fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang-nixl-mooncake:latest1"
+  imagePullPolicy: IfNotPresent
+  port: 8000
+  resources:
+    requests:
+      cpu: "5000m"
+      memory: "64Gi"
+    limits:
+      cpu: "20000m"
+      memory: "64Gi"
+  service:
+    type: LoadBalancer
+    port: 8000
+    loadBalancerIP: ""
+
+# Prefill Configuration
+prefill:
+  replicas: 1
+  groupSize: 2
+  restartPolicy: None
+  image: "fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang-nixl-mooncake:latest1"
+  imagePullPolicy: IfNotPresent
+  bootstrapPort: 8998
+  resources:
+    gpu: 8
+  args:
+    tpSize: 16
+    ppSize: 1
+    epEnabled: false
+    memFractionStatic: 0.7
+  extraArgs: []
+  env: []
+  service:
+    port: 30000
+
+# Decode Configuration
+decode:
+  replicas: 1
+  groupSize: 2
+  restartPolicy: None
+  image: "fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang-nixl-mooncake:latest1"
+  imagePullPolicy: IfNotPresent
+  resources:
+    gpu: 8
+  args:
+    tpSize: 16
+    ppSize: 1
+    epEnabled: false
+    memFractionStatic: 0.7
+  extraArgs: []
+  env: []
+  service:
+    port: 30001
+
+# Common Environment Variables
+commonEnv:
+  - name: NCCL_IB_CUDA_SUPPORT
+    value: "1"
+  - name: NCCL_IB_DISABLE
+    value: "0"
+  - name: NCCL_IB_GID_INDEX
+    value: "3"
+  - name: NCCL_DEBUG
+    value: INFO
+  - name: GLOO_SOCKET_IFNAME
+    value: eth0
+  - name: NCCL_SOCKET_IFNAME
+    value: eth0
+  - name: NCCL_IB_HCA
+    value: "mlx5_bond_0:1,mlx5_bond_1:1,mlx5_bond_2:1,mlx5_bond_3:1,mlx5_bond_4:1,mlx5_bond_5:1,mlx5_bond_6:1,mlx5_bond_7:1"
+  - name: NVSHMEM_HCA_LIST
+    value: "mlx5_bond_0:1,mlx5_bond_1:1,mlx5_bond_2:1,mlx5_bond_3:1,mlx5_bond_4:1,mlx5_bond_5:1,mlx5_bond_6:1,mlx5_bond_7:1"
+  - name: NVSHMEM_IB_ENABLE_IBGDA
+    value: "1"
+  - name: NVSHMEM_IBGDA_NIC_HANDLER
+    value: "gpu"
+  - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+    value: "eth0"

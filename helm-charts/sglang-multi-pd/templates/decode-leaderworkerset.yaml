@@ -1,65 +1,78 @@
+{{- if .Values.pd.enabled }}
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: {{ include "helm.fullname" . }}
+  name: {{ include "helm.decodeLWSName" . }}
   labels:
     {{- include "helm.labels" . | nindent 4 }}
+    component: decode
 spec:
-  replicas: {{ .Values.server.replicas }}
+  replicas: {{ .Values.decode.replicas }}
   leaderWorkerTemplate:
-    size: {{ .Values.multiNode.groupSize }}
-    restartPolicy: {{ .Values.leaderWorkerSet.restartPolicy }}
+    size: {{ .Values.decode.groupSize }}
+    restartPolicy: {{ .Values.decode.restartPolicy }}
     leaderTemplate:
       metadata:
         labels:
           {{- include "helm.selectorLabels" . | nindent 10 }}
+          component: decode
           role: leader
       spec:
         dnsPolicy: ClusterFirstWithHostNet
         hostNetwork: true
         hostIPC: true
         containers:
-          - name: {{ include "helm.fullname" . }}-leader
-            image: {{ .Values.server.image }}
-            imagePullPolicy: {{ .Values.server.pullPolicy }}
+          - name: {{ include "helm.decodeLWSName" . }}-leader
+            image: {{ .Values.decode.image }}
+            imagePullPolicy: {{ .Values.decode.imagePullPolicy }}
             securityContext:
               privileged: true
-            {{- if $.Values.server.env }}
+            {{- if .Values.decode.env }}
             env:
-              {{- toYaml .Values.server.env | nindent 14 }}
+              {{- toYaml .Values.decode.env | nindent 14 }}
+            {{- end }}
+            {{- if .Values.commonEnv }}
+            env:
+              {{- toYaml .Values.commonEnv | nindent 14 }}
             {{- end }}
             command: ["bash", "-c"]
             args:
               - |
                 python3 -m sglang.launch_server \
-                  --model-path /{{ .Values.model.name }} \
-                  --tp {{ .Values.server.args.tpSize }} \
-                  --pp {{ .Values.server.args.ppSize }} \
+                  --model-path {{ .Values.model.path }} \
+                  --tp {{ .Values.decode.args.tpSize }} \
+                  --pp {{ .Values.decode.args.ppSize }} \
                   --dist-init-addr $(LWS_LEADER_ADDRESS):20000 \
                   --nnodes $(LWS_GROUP_SIZE) \
                   --node-rank $(LWS_WORKER_INDEX) \
-                  {{- if .Values.server.args.epEnabled }}
+                  {{- if .Values.decode.args.epEnabled }}
                   --enable-ep-moe \
                   {{- end }}
                   --trust-remote-code \
                   --host 0.0.0.0 \
-                  --port 60000 \
-                  --mem-fraction-static {{ .Values.server.args.memFractionStatic}} \
-                  {{- range .Values.server.args.extraArgs }}
+                  --port {{ .Values.decode.service.port }} \
+                  --mem-fraction-static {{ .Values.decode.args.memFractionStatic }} \
+                  --disaggregation-mode decode \
+                  --pdlb-url http://{{ include "helm.lbName" . }}:{{ .Values.loadBalancer.port }} \
+                  --disaggregation-transfer-backend {{ .Values.pd.transferBackend }} \
+                  --enable-deepep-moe --deepep-mode low_latency \
+                  {{- range .Values.decode.args.extraArgs }}
                   {{ . }} \
                   {{- end }}
             resources:
               limits:
-                nvidia.com/gpu: {{ .Values.server.resources.gpu }}
+                nvidia.com/gpu: {{ .Values.decode.resources.gpu }}
               requests:
-                nvidia.com/gpu: {{ .Values.server.resources.gpu }}
+                nvidia.com/gpu: {{ .Values.decode.resources.gpu }}
             ports:
-              - containerPort: 60000
+              - containerPort: {{ .Values.decode.service.port }}
+                name: http
               - containerPort: 20000
+                name: dist
             startupProbe:
               httpGet:
                 path: /health
-                port: 60000
+                port: {{ .Values.decode.service.port }}
                 scheme: HTTP
               timeoutSeconds: 3
               periodSeconds: 10
@@ -67,7 +80,7 @@ spec:
             livenessProbe:
               httpGet:
                 path: /health
-                port: 60000
+                port: {{ .Values.decode.service.port }}
                 scheme: HTTP
               timeoutSeconds: 3
               periodSeconds: 10
@@ -75,7 +88,7 @@ spec:
             readinessProbe:
               httpGet:
                 path: /health
-                port: 60000
+                port: {{ .Values.decode.service.port }}
                 scheme: HTTP
               timeoutSeconds: 3
               periodSeconds: 10
@@ -85,11 +98,11 @@ spec:
               mountPath: /dev/shm
             {{- if .Values.model.pvc.enabled }}
             - name: model
-              mountPath: /{{ .Values.model.name }}
+              mountPath: {{ .Values.model.path }}
               subPath: {{ .Values.model.pvc.path }}
             {{- else if .Values.model.local.enabled }}
             - name: model
-              mountPath: /{{ .Values.model.name }}
+              mountPath: {{ .Values.model.path }}
             {{- end }}
             - name: ib
               mountPath: /dev/infiniband
@@ -114,55 +127,63 @@ spec:
       metadata:
         labels:
           {{- include "helm.selectorLabels" . | nindent 10 }}
+          component: decode
       spec:
         dnsPolicy: ClusterFirstWithHostNet
         hostNetwork: true
         hostIPC: true
         containers:
-          - name: {{ include "helm.fullname" . }}-worker
-            image: {{ .Values.server.image }}
-            imagePullPolicy: {{ .Values.server.pullPolicy }}
+          - name: {{ include "helm.decodeLWSName" . }}-worker
+            image: {{ .Values.decode.image }}
+            imagePullPolicy: {{ .Values.decode.imagePullPolicy }}
             securityContext:
               privileged: true
-            {{- if .Values.server.env }}
+            {{- if .Values.decode.env }}
             env:
-              {{- toYaml .Values.server.env | nindent 14 }}
+              {{- toYaml .Values.decode.env | nindent 14 }}
+            {{- end }}
+            {{- if .Values.commonEnv }}
+            env:
+              {{- toYaml .Values.commonEnv | nindent 14 }}
             {{- end }}
             command: ["bash", "-c"]
             args:
               - |
                 python3 -m sglang.launch_server \
-                  --model-path /{{ .Values.model.name }} \
-                  --tp {{ .Values.server.args.tpSize }} \
-                  --pp {{ .Values.server.args.ppSize }} \
+                  --model-path {{ .Values.model.path }} \
+                  --tp {{ .Values.decode.args.tpSize }} \
+                  --pp {{ .Values.decode.args.ppSize }} \
                   --dist-init-addr $(LWS_LEADER_ADDRESS):20000 \
                   --nnodes $(LWS_GROUP_SIZE) \
                   --node-rank $(LWS_WORKER_INDEX) \
-                  {{- if .Values.server.args.epEnabled }}
+                  {{- if .Values.decode.args.epEnabled }}
                   --enable-ep-moe \
                   {{- end }}
                   --trust-remote-code \
                   --host 0.0.0.0 \
-                  --port 60000 \
-                  --mem-fraction-static 0.8 \
-                  {{- range .Values.server.args.extraArgs }}
+                  --port {{ .Values.decode.service.port }} \
+                  --mem-fraction-static {{ .Values.decode.args.memFractionStatic }} \
+                  --disaggregation-mode decode \
+                  --disaggregation-transfer-backend {{ .Values.pd.transferBackend }} \
+                  --enable-deepep-moe --deepep-mode low_latency \
+                  {{- range .Values.decode.args.extraArgs }}
                   {{ . }} \
                   {{- end }}
             resources:
               limits:
-                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+                nvidia.com/gpu: {{ .Values.decode.resources.gpu }}
               requests:
-                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+                nvidia.com/gpu: {{ .Values.decode.resources.gpu }}
             volumeMounts:
             - name: dshm
               mountPath: /dev/shm
             {{- if .Values.model.pvc.enabled }}
             - name: model
-              mountPath: /{{ .Values.model.name }}
+              mountPath: {{ .Values.model.path }}
               subPath: {{ .Values.model.pvc.path }}
             {{- else if .Values.model.local.enabled }}
             - name: model
-              mountPath: /{{ .Values.model.name }}
+              mountPath: {{ .Values.model.path }}
             {{- end }}
             - name: ib
               mountPath: /dev/infiniband
@@ -183,3 +204,4 @@ spec:
           - name: ib
             hostPath:
               path: /dev/infiniband
+{{- end }}

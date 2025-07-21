@@ -1,0 +1,22 @@
+{{- if .Values.pd.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "helm.lbName" . }}
+  labels:
+    {{- include "helm.labels" . | nindent 4 }}
+    component: loadbalancer
+spec:
+  type: {{ .Values.loadBalancer.service.type }}
+  {{- if and (eq .Values.loadBalancer.service.type "LoadBalancer") .Values.loadBalancer.service.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.loadBalancer.service.loadBalancerIP }}
+  {{- end }}
+  ports:
+    - port: {{ .Values.loadBalancer.service.port }}
+      targetPort: {{ .Values.loadBalancer.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "helm.selectorLabels" . | nindent 4 }}
+    component: loadbalancer
+{{- end }}

@@ -1,65 +1,81 @@
+{{- if .Values.pd.enabled }}
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: {{ include "helm.fullname" . }}
+  name: {{ include "helm.prefillLWSName" . }}
   labels:
     {{- include "helm.labels" . | nindent 4 }}
+    component: prefill
 spec:
-  replicas: {{ .Values.server.replicas }}
+  replicas: {{ .Values.prefill.replicas }}
   leaderWorkerTemplate:
-    size: {{ .Values.multiNode.groupSize }}
-    restartPolicy: {{ .Values.leaderWorkerSet.restartPolicy }}
+    size: {{ .Values.prefill.groupSize }}
+    restartPolicy: {{ .Values.prefill.restartPolicy }}
     leaderTemplate:
       metadata:
         labels:
           {{- include "helm.selectorLabels" . | nindent 10 }}
+          component: prefill
           role: leader
       spec:
         dnsPolicy: ClusterFirstWithHostNet
         hostNetwork: true
         hostIPC: true
         containers:
-          - name: {{ include "helm.fullname" . }}-leader
-            image: {{ .Values.server.image }}
-            imagePullPolicy: {{ .Values.server.pullPolicy }}
+          - name: {{ include "helm.prefillLWSName" . }}-leader
+            image: {{ .Values.prefill.image }}
+            imagePullPolicy: {{ .Values.prefill.imagePullPolicy }}
             securityContext:
               privileged: true
-            {{- if $.Values.server.env }}
+            {{- if .Values.prefill.env }}
             env:
-              {{- toYaml .Values.server.env | nindent 14 }}
+              {{- toYaml .Values.prefill.env | nindent 14 }}
+            {{- end }}
+            {{- if .Values.commonEnv }}
+            env:
+              {{- toYaml .Values.commonEnv | nindent 14 }}
             {{- end }}
             command: ["bash", "-c"]
             args:
               - |
                 python3 -m sglang.launch_server \
-                  --model-path /{{ .Values.model.name }} \
-                  --tp {{ .Values.server.args.tpSize }} \
-                  --pp {{ .Values.server.args.ppSize }} \
+                  --model-path {{ .Values.model.path }} \
+                  --tp {{ .Values.prefill.args.tpSize }} \
+                  --pp {{ .Values.prefill.args.ppSize }} \
                   --dist-init-addr $(LWS_LEADER_ADDRESS):20000 \
                   --nnodes $(LWS_GROUP_SIZE) \
                   --node-rank $(LWS_WORKER_INDEX) \
-                  {{- if .Values.server.args.epEnabled }}
+                  {{- if .Values.prefill.args.epEnabled }}
                   --enable-ep-moe \
                   {{- end }}
                   --trust-remote-code \
                   --host 0.0.0.0 \
-                  --port 60000 \
-                  --mem-fraction-static {{ .Values.server.args.memFractionStatic}} \
-                  {{- range .Values.server.args.extraArgs }}
+                  --port {{ .Values.prefill.service.port }} \
+                  --mem-fraction-static {{ .Values.prefill.args.memFractionStatic }} \
+                  --disaggregation-mode prefill \
+                  --disaggregation-bootstrap-port {{ .Values.prefill.bootstrapPort }} \
+                  --pdlb-url http://{{ include "helm.lbName" . }}:{{ .Values.loadBalancer.port }} \
+                  --disaggregation-transfer-backend {{ .Values.pd.transferBackend }} \
+                  --enable-deepep-moe --deepep-mode normal \
+                  {{- range .Values.prefill.args.extraArgs }}
                   {{ . }} \
                   {{- end }}
             resources:
               limits:
-                nvidia.com/gpu: {{ .Values.server.resources.gpu }}
+                nvidia.com/gpu: {{ .Values.prefill.resources.gpu }}
               requests:
-                nvidia.com/gpu: {{ .Values.server.resources.gpu }}
+                nvidia.com/gpu: {{ .Values.prefill.resources.gpu }}
             ports:
-              - containerPort: 60000
+              - containerPort: {{ .Values.prefill.service.port }}
+                name: http
               - containerPort: 20000
+                name: dist
+              - containerPort: {{ .Values.prefill.bootstrapPort }}
+                name: bootstrap
             startupProbe:
               httpGet:
                 path: /health
-                port: 60000
+                port: {{ .Values.prefill.service.port }}
                 scheme: HTTP
               timeoutSeconds: 3
               periodSeconds: 10
@@ -67,7 +83,7 @@ spec:
             livenessProbe:
               httpGet:
                 path: /health
-                port: 60000
+                port: {{ .Values.prefill.service.port }}
                 scheme: HTTP
               timeoutSeconds: 3
               periodSeconds: 10
@@ -75,7 +91,7 @@ spec:
             readinessProbe:
               httpGet:
                 path: /health
-                port: 60000
+                port: {{ .Values.prefill.service.port }}
                 scheme: HTTP
               timeoutSeconds: 3
               periodSeconds: 10
@@ -85,11 +101,11 @@ spec:
               mountPath: /dev/shm
             {{- if .Values.model.pvc.enabled }}
             - name: model
-              mountPath: /{{ .Values.model.name }}
+              mountPath: {{ .Values.model.path }}
               subPath: {{ .Values.model.pvc.path }}
             {{- else if .Values.model.local.enabled }}
             - name: model
-              mountPath: /{{ .Values.model.name }}
+              mountPath: {{ .Values.model.path }}
             {{- end }}
             - name: ib
               mountPath: /dev/infiniband
@@ -114,55 +130,64 @@ spec:
       metadata:
         labels:
           {{- include "helm.selectorLabels" . | nindent 10 }}
+          component: prefill
       spec:
         dnsPolicy: ClusterFirstWithHostNet
         hostNetwork: true
         hostIPC: true
         containers:
-          - name: {{ include "helm.fullname" . }}-worker
-            image: {{ .Values.server.image }}
-            imagePullPolicy: {{ .Values.server.pullPolicy }}
+          - name: {{ include "helm.prefillLWSName" . }}-worker
+            image: {{ .Values.prefill.image }}
+            imagePullPolicy: {{ .Values.prefill.imagePullPolicy }}
             securityContext:
               privileged: true
-            {{- if .Values.server.env }}
+            {{- if .Values.prefill.env }}
             env:
-              {{- toYaml .Values.server.env | nindent 14 }}
+              {{- toYaml .Values.prefill.env | nindent 14 }}
+            {{- end }}
+            {{- if .Values.commonEnv }}
+            env:
+              {{- toYaml .Values.commonEnv | nindent 14 }}
             {{- end }}
             command: ["bash", "-c"]
             args:
               - |
                 python3 -m sglang.launch_server \
-                  --model-path /{{ .Values.model.name }} \
-                  --tp {{ .Values.server.args.tpSize }} \
-                  --pp {{ .Values.server.args.ppSize }} \
+                  --model-path {{ .Values.model.path }} \
+                  --tp {{ .Values.prefill.args.tpSize }} \
+                  --pp {{ .Values.prefill.args.ppSize }} \
                   --dist-init-addr $(LWS_LEADER_ADDRESS):20000 \
                   --nnodes $(LWS_GROUP_SIZE) \
                   --node-rank $(LWS_WORKER_INDEX) \
-                  {{- if .Values.server.args.epEnabled }}
+                  {{- if .Values.prefill.args.epEnabled }}
                   --enable-ep-moe \
                   {{- end }}
                   --trust-remote-code \
                   --host 0.0.0.0 \
-                  --port 60000 \
-                  --mem-fraction-static 0.8 \
-                  {{- range .Values.server.args.extraArgs }}
+                  --port {{ .Values.prefill.service.port }} \
+                  --mem-fraction-static {{ .Values.prefill.args.memFractionStatic }} \
+                  --disaggregation-mode prefill \
+                  --disaggregation-bootstrap-port {{ .Values.prefill.bootstrapPort }} \
+                  --disaggregation-transfer-backend {{ .Values.pd.transferBackend }} \
+                  --enable-deepep-moe --deepep-mode normal \
+                  {{- range .Values.prefill.args.extraArgs }}
                   {{ . }} \
                   {{- end }}
             resources:
               limits:
-                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+                nvidia.com/gpu: {{ .Values.prefill.resources.gpu }}
               requests:
-                nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+                nvidia.com/gpu: {{ .Values.prefill.resources.gpu }}
             volumeMounts:
             - name: dshm
               mountPath: /dev/shm
             {{- if .Values.model.pvc.enabled }}
             - name: model
-              mountPath: /{{ .Values.model.name }}
+              mountPath: {{ .Values.model.path }}
               subPath: {{ .Values.model.pvc.path }}
             {{- else if .Values.model.local.enabled }}
             - name: model
-              mountPath: /{{ .Values.model.name }}
+              mountPath: {{ .Values.model.path }}
             {{- end }}
             - name: ib
               mountPath: /dev/infiniband
@@ -183,3 +208,4 @@ spec:
           - name: ib
             hostPath:
               path: /dev/infiniband
+{{- end }}
