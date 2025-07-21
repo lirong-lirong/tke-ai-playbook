@@ -23,9 +23,15 @@ configMapGenerator:
   - scripts/tests/test_generate_config.py
   - scripts/__init__.py
   - scripts/tests/__init__.py
+  options:
+    disableNameSuffixHash: true
+
 - name: test-parameters-config
   files:
   - configs/test-parameters-config.yaml
+  options:
+    disableNameSuffixHash: true
+
 - name: system-config
   files:
   - configs/system-config.yaml
