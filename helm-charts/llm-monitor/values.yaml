@@ -87,6 +87,15 @@ kube-prometheus-stack:
             - port: "http"
               interval: "30s"
 
+        - name: "rdma-exporter"
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: rdma-exporter
+          endpoints:
+            - port: "metrics"
+              interval: "5s"
+              path: "/metrics"
+
       # Configuration for the Prometheus server's PersistentVolumeClaim (PVC).
       storageSpec:
         volumeClaimTemplate:
@@ -106,40 +115,61 @@ kube-prometheus-stack:
 
 grafana:
   enabled: false
-  # service:
-  #   enabled: true
-  #   type: LoadBalancer
-  # datasources:
-  #   datasources.yaml:
-  #     apiVersion: 1
-  #     datasources:
-  #       - name: Prometheus
-  #         type: prometheus
-  #         url: http://{{ .Release.Name }}-prometheus-server.{{ .Release.Namespace }}.svc.cluster.local
-  #         access: proxy
-  #         isDefault: true
-  # dashboardProviders:
-  #   dashboardproviders.yaml:
-  #     apiVersion: 1
-  #     providers:
-  #       - name: 'default'
-  #         orgId: 1
-  #         folder: ''
-  #         type: file
-  #         disableDeletion: false
-  #         editable: true
-  #         options:
-  #           path: /var/lib/grafana/dashboards/default
-  #   dashboards:
-  #     default:
-  #       dcgm-exporter:
-  #         file: dashboards/dcgm-exporter-dashboard.json
+  service:
+    enabled: true
+    type: LoadBalancer
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://{{ .Release.Name }}-prometheus-server.{{ .Release.Namespace }}.svc.cluster.local
+          access: proxy
+          isDefault: true
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      dcgm-exporter:
+        file: dashboards/dcgm-exporter-dashboard.json
+      rdma-exporter:
+        file: dashboards/rdma-dashboard.json
 
 dcgm-exporter:
   enabled: true
   serviceMonitor:
     enabled: true
+    interval: 5s
   # Add a nodeSelector to ensure the exporter only runs on nodes with GPUs.
   # Please replace `gpu: "true"` with the actual label of your GPU nodes.
     nodeSelector:
     nvidia-device-enable: "enable"
+
+rdma-exporter:
+  enabled: true
+  image:
+    repository: fanjiankong-bj.tencentcloudcr.com/pengdrumli/rdma-monitor
+    tag: v1.0
+  serviceMonitor:
+    enabled: true
+  nodeSelector:
+    # Please specify the label for your nodes with RDMA hardware
+    # For example:
+    # rdma-capable: "true"
+    nvidia-device-enable: "enable"
+  env:
+    LISTEN_PORT: "9890"
+  service: 
+    port: 9890
+

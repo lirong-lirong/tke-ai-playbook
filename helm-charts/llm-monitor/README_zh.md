@@ -1,5 +1,14 @@
 # llm-monitor
 
+本 Chart 用于提供一个包含 GPU 和 RDMA 监控的完整监控解决方案。
+
+## 组件
+
+- **kube-prometheus-stack**: 完整的 Prometheus 技术栈，包含 Prometheus Operator。
+- **dcgm-exporter**: 用于采集 NVIDIA GPU 指标。
+- **rdma-exporter**: 用于采集 RDMA (Infiniband) 网卡指标。
+- **grafana**: 用于指标的可视化，并预置了 GPU 和 RDMA 的监控面板。
+
 ## 安装
 
 ```bash

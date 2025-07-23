@@ -2,3 +2,5 @@
 .DS_Store
 **/.DS_Store
 .DS_Store?
+# Task-related files
+task.md

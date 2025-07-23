@@ -20,6 +20,7 @@ This chart now uses **kube-prometheus-stack** (v58.1.0) instead of the basic Pro
 
 - **kube-prometheus-stack**: Full Prometheus stack with operator / 完整的Prometheus堆栈与Operator
 - **dcgm-exporter**: NVIDIA GPU metrics collection / NVIDIA GPU指标收集
+- **rdma-exporter**: RDMA (Infiniband) metrics collection / RDMA (Infiniband) 指标收集
 - **grafana**: Visualization (optional) / 可视化（可选）
 
 ## Quick Start / 快速开始

@@ -1,0 +1,89 @@
+# Default values for rdma-exporter.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: fanjiankong-bj.tencentcloudcr.com/pengdrumli/rdma-monitor
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "v1.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# -- Annotations to add to the DaemonSet's pod template.
+podAnnotations: {}
+
+# -- Security context for the pods.
+# Required to access the host's /sys filesystem.
+podSecurityContext: {}
+  # fsGroup: 2000
+
+# -- Security context for the containers.
+securityContext:
+  privileged: true
+
+service:
+  type: ClusterIP
+  port: 9898
+
+# -- ServiceMonitor configuration for Prometheus Operator
+serviceMonitor:
+  # -- If true, a ServiceMonitor CRD is created for a Prometheus Operator
+  enabled: false
+  # -- Namespace where Prometheus Operator is running
+  namespace: ""
+  # -- Scrape interval for the ServiceMonitor
+  interval: 15s
+  # -- Scrape timeout for the ServiceMonitor
+  scrapeTimeout: 10s
+  # -- Additional labels for the ServiceMonitor
+  labels: {}
+
+# -- Node selector for scheduling the exporter pods.
+# By default, it will be scheduled on all nodes.
+# You should specify a selector to target nodes with RDMA hardware.
+# For example:
+# nodeSelector:
+#   nvidia.com/gpu: "true"
+nodeSelector: {}
+
+# -- Tolerations for scheduling the exporter pods.
+tolerations: []
+
+# -- Affinity for scheduling the exporter pods.
+affinity: {}
+
+# -- Resources requests and limits for the exporter container.
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# -- Environment variables for the exporter pod
+env:
+  # The host's /sys directory path
+  SYS_PATH: "/host/sys"
+  # The port for the exporter to listen on
+  LISTEN_PORT: "9898"
+  # Log level (e.g., INFO, DEBUG, WARNING, ERROR)
+  LOG_LEVEL: "INFO"
+  # The interval in seconds at which the exporter scrapes the hw_counters
+  POLL_INTERVAL: "15"
