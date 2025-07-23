@@ -1,29 +1,103 @@
-prometheus:
+kube-prometheus-stack:
   enabled: true
-  server:
-    enabled: true
-    service:
-      type: LoadBalancer
-    persistentVolume:
-      enabled: true
-      size: "10Gi"
-    extraScrapeConfigs: |
-      - job_name: 'pushgateway'
-        static_configs:
-          - targets: ['{{ .Release.Name }}-prometheus-pushgateway:9091']
-  prometheusSpec:
-    serviceMonitorSelector: 
-      matchExpressions:
-        - key: app.kubernetes.io/name
-          operator: In
-          values:
-            - dcgm-exporter
-  alertmanager:
+  # --- Use kube-prometheus-stack configuration ---
+  # This replaces the simple prometheus server with full kube-prometheus-stack
+  
+  # Disable components we don't need
+  grafana:
     enabled: false
-  kube-state-metrics:
+  alertmanager:
     enabled: false
   prometheus-node-exporter:
     enabled: false
+  kube-state-metrics:
+    enabled: false
+
+  # Global Image Registry
+  global:
+    imageRegistry: ""
+
+  # Image override section for offline installation
+  prometheusOperator:
+    image:
+      registry: fanjiankong-bj.tencentcloudcr.com
+      repository: pengdrumli/prometheus-operator
+      tag: v0.73.0
+      pullPolicy: IfNotPresent
+
+    prometheusConfigReloader:
+      image:
+        registry: fanjiankong-bj.tencentcloudcr.com
+        repository: pengdrumli/prometheus-config-reloader
+        tag: v0.73.0
+        pullPolicy: IfNotPresent
+
+    admissionWebhooks:
+      patch:
+        enabled: true
+        image:
+          registry: fanjiankong-bj.tencentcloudcr.com
+          repository: pengdrumli/kube-webhook-certgen
+          tag: v20221220-controller-v1.5.1-58-g787ea74b6
+          pullPolicy: IfNotPresent
+      create:
+        enabled: true
+        image:
+          registry: fanjiankong-bj.tencentcloudcr.com
+          repository: pengdrumli/kube-webhook-certgen
+          tag: v20221220-controller-v1.5.1-58-g787ea74b6
+          pullPolicy: IfNotPresent
+
+  # Core Prometheus Configuration
+  prometheus:
+    enabled: true
+
+    service:
+      type: LoadBalancer
+      port: 9090
+
+    prometheusSpec:
+      # Image for the main Prometheus server
+      image:
+        registry: fanjiankong-bj.tencentcloudcr.com
+        repository: pengdrumli/prometheus
+        tag: v2.51.2
+        pullPolicy: IfNotPresent
+
+      # This allows Prometheus to discover ServiceMonitors in any namespace.
+      serviceMonitorSelectorNilUsesHelmValues: false
+
+      # DCGM Exporter ServiceMonitor configuration
+      # The namespaceSelector is removed to restrict scraping to the chart's release namespace.
+      additionalServiceMonitors:
+        - name: "dcgm-exporter"
+          selector:
+            matchLabels:
+              app: dcgm-exporter
+          endpoints:
+            - port: "metrics"
+              interval: "5s"
+              path: "/metrics"
+
+        - name: "pushgateway"
+          selector:
+            matchLabels:
+              app: prometheus-pushgateway
+          endpoints:
+            - port: "http"
+              interval: "30s"
+
+      # Configuration for the Prometheus server's PersistentVolumeClaim (PVC).
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: "cfs-turbo"
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+
+  # Keep pushgateway for compatibility
   prometheus-pushgateway:
     enabled: true
     service:
@@ -31,37 +105,41 @@ prometheus:
       port: 9091
 
 grafana:
-  enabled: true
-  service:
-    enabled: true
-    type: LoadBalancer
-  datasources:
-    datasources.yaml:
-      apiVersion: 1
-      datasources:
-        - name: Prometheus
-          type: prometheus
-          url: http://{{ .Release.Name }}-prometheus-server.{{ .Release.Namespace }}.svc.cluster.local
-          access: proxy
-          isDefault: true
-  dashboardProviders:
-    dashboardproviders.yaml:
-      apiVersion: 1
-      providers:
-        - name: 'default'
-          orgId: 1
-          folder: ''
-          type: file
-          disableDeletion: false
-          editable: true
-          options:
-            path: /var/lib/grafana/dashboards/default
-    dashboards:
-      default:
-        dcgm-exporter:
-          file: dashboards/dcgm-exporter-dashboard.json
+  enabled: false
+  # service:
+  #   enabled: true
+  #   type: LoadBalancer
+  # datasources:
+  #   datasources.yaml:
+  #     apiVersion: 1
+  #     datasources:
+  #       - name: Prometheus
+  #         type: prometheus
+  #         url: http://{{ .Release.Name }}-prometheus-server.{{ .Release.Namespace }}.svc.cluster.local
+  #         access: proxy
+  #         isDefault: true
+  # dashboardProviders:
+  #   dashboardproviders.yaml:
+  #     apiVersion: 1
+  #     providers:
+  #       - name: 'default'
+  #         orgId: 1
+  #         folder: ''
+  #         type: file
+  #         disableDeletion: false
+  #         editable: true
+  #         options:
+  #           path: /var/lib/grafana/dashboards/default
+  #   dashboards:
+  #     default:
+  #       dcgm-exporter:
+  #         file: dashboards/dcgm-exporter-dashboard.json
 
 dcgm-exporter:
   enabled: true
   serviceMonitor:
     enabled: true
+  # Add a nodeSelector to ensure the exporter only runs on nodes with GPUs.
+  # Please replace `gpu: "true"` with the actual label of your GPU nodes.
+    nodeSelector:
+    nvidia-device-enable: "enable"
