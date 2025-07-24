@@ -47,6 +47,7 @@ spec:
                   --node-rank $(LWS_WORKER_INDEX) \
                   {{- if .Values.decode.args.epEnabled }}
                   --enable-ep-moe \
+                  --enable-deepep-moe --deepep-mode low_latency \
                   {{- end }}
                   --trust-remote-code \
                   --host 0.0.0.0 \
@@ -55,7 +56,6 @@ spec:
                   --disaggregation-mode decode \
                   --pdlb-url http://{{ include "helm.lbName" . }}:{{ .Values.loadBalancer.port }} \
                   --disaggregation-transfer-backend {{ .Values.pd.transferBackend }} \
-                  --enable-deepep-moe --deepep-mode low_latency \
                   {{- range .Values.decode.args.extraArgs }}
                   {{ . }} \
                   {{- end }}

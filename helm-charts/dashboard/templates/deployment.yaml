@@ -37,7 +37,7 @@ spec:
         workingDir: /app
         command: ["sh", "-c"]
         args: 
-          - pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt && python app.py
+          - pip install -i https://mirrors.cloud.tencent.com/pypi/simple  -r requirements.txt && python app.py
       volumes:
       - name: app-code
         configMap:

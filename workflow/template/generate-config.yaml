@@ -29,7 +29,7 @@ spec:
       imagePullPolicy: Always
       command: [sh, -c]
       source: |
-        pip install pyyaml
+        pip install -i https://mirrors.cloud.tencent.com/pypi/simple pyyaml
         python /scripts/generate_config.py
       volumeMounts:
       - name: scripts

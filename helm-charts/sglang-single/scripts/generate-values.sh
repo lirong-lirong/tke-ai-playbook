@@ -54,7 +54,7 @@ model:
 
 server:
   replicas: $REPLICAS
-  image: "ccr.ccs.tencentyun.com/tke-ai-playbook/sglang:nightly"
+  image: "fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang:v0.4.8-cu126"
   imagePullPolicy: IfNotPresent
   resources:
     requests:

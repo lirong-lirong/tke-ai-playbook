@@ -81,7 +81,7 @@ def build_final_config(scenario_combo, common_config):
             "engine": {"name": engine_name, "version": "", "image": ""},
             "group_size": group_size,
             "pd": {"enable": is_pd_enabled},
-            "ep_enable": combo.get('ep_enable', True),
+            "ep_enable": combo.get('ep_enable', False),
             "args": combo.get('args', []),
             "env": combo.get('env', [])
         },
@@ -91,7 +91,7 @@ def build_final_config(scenario_combo, common_config):
             "OSL": int(final_test_params.get('osl', 500)),
             "dataset": final_test_params.get('dataset', 'random'),
             "dataset_path": final_test_params.get('dataset_path', ''),
-            "EOS": final_test_params.get('eos', True),
+            "EOS": final_test_params.get('eos', False),
             "concurrency": final_test_params.get('concurrency', [1, 8, 16]),
             "requests": int(final_test_params.get('requests', 5))
         },
@@ -100,12 +100,16 @@ def build_final_config(scenario_combo, common_config):
 
     if is_pd_enabled:
         config["deploy"]["pd"].update({
-            "prefill": {"replicas": combo.get('pd_prefill_replicas', 1), "tp": combo.get('pd_prefill_tp', 1), "pp": combo.get('pd_prefill_pp', 1), "ep_enable": combo.get('ep_enable', True), "args": [], "env": []},
-            "decode": {"replicas": combo.get('pd_decode_replicas', 1), "tp": combo.get('pd_decode_tp', 1), "pp": combo.get('pd_decode_pp', 1), "ep_enable": combo.get('ep_enable', True), "args": [], "env": []}
+            "prefill": {"replicas": combo.get('pd_prefill_replicas', 1), "tp": combo.get('pd_prefill_tp', 1), "pp": combo.get('pd_prefill_pp', 1), "ep_enable": combo.get('ep_enable', False), "args": [], "env": []},
+            "decode": {"replicas": combo.get('pd_decode_replicas', 1), "tp": combo.get('pd_decode_tp', 1), "pp": combo.get('pd_decode_pp', 1), "ep_enable": combo.get('ep_enable', False), "args": [], "env": []}
         })
         config["deploy"].update({"replicas": 0, "tp": 0, "pp": 0})
     else:
         config["deploy"].update({"replicas": combo.get('replicas', 1), "tp": combo.get('tp', 1), "pp": combo.get('pp', 1)})
+        config["deploy"]["pd"].update({
+            "prefill": {"replicas": 0, "tp": 0, "pp": 0, "ep_enable": False, "args": [], "env": []},
+            "decode": {"replicas": 0, "tp": 0, "pp": 0, "ep_enable": False, "args": [], "env": []}
+        })
         
     return config
 

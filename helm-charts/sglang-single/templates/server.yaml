@@ -28,7 +28,7 @@ spec:
             --tp {{ .args.tpSize }} \
             --pp {{ .args.ppSize }} \
             {{- if .args.epEnabled }}
-            --enable-expert-parallel \
+            --enable-ep-moe \
             {{- end }}
             {{- range .extraArgs }}
             {{ . }} \
