@@ -1,0 +1,1485 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 35,
+  "links": [],
+  "panels": [
+    {
+      "datasource": "${datasource}",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointShape": "circle",
+            "pointSize": {
+              "fixed": 5
+            },
+            "pointStrokeWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points+lines"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "maxPerRow": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "number_of_concurrency"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "total_token_throughput"
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.0.2",
+      "repeat": "metadata_name",
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "datasource": "${datasource}",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \n    `Time taken for tests (s)` AS time_taken_for_tests, \n    `Number of concurrency` AS number_of_concurrency, \n    `Total requests` AS total_requests, \n    `Succeed requests` AS succeed_requests, \n    `Failed requests` AS failed_requests, \n    `Output token throughput (tok/s)` AS output_token_throughput, \n    `Total token throughput (tok/s)` AS total_token_throughput, \n    `Request throughput (req/s)` AS request_throughput, \n    `Average latency (s)` AS average_latency, \n    `Average time to first token (s)` AS avg_ttft, \n    `Average time per output token (s)` AS avg_tpot, \n    `Average input tokens per request` AS average_input_tokens_per_request, \n    `Average output tokens per request` AS average_output_tokens_per_request, \n    `Average package latency (s)` AS average_package_latency, \n    `Average package per request` AS average_package_per_request, \n    CAST(concurrency AS UNSIGNED) AS concurrency, \n    start_timestamp AS start_timestamp, \n    end_timestamp AS end_timestamp,\n    start_timestamp * 1000 AS start_timestamp_ms, \n    end_timestamp * 1000 AS end_timestamp_ms,\n    test_ISL AS test_isl, \n    test_OSL AS test_osl, \n    test_EOS AS test_eos, \n    num_requests AS num_requests,\n    id AS id, \n    metadata_name AS metadata_name, \n    metadata_node_size AS metadata_node_size, \n    metadata_gpu_per_node AS metadata_gpu_per_node, \n    metadata_gpu_info AS metadata_gpu_info, \n    deploy_model_name AS deploy_model_name, \n    deploy_engine_name AS deploy_engine_name, \n    deploy_engine_version AS deploy_engine_version, \n    deploy_engine_image AS deploy_engine_image, \n    deploy_replicas AS deploy_replicas, \n    deploy_group_size AS deploy_group_size, \n    deploy_pd_enable AS deploy_pd_enable, \n    deploy_pd_prefill_replicas AS deploy_pd_prefill_replicas, \n    deploy_pd_prefill_tp AS deploy_pd_prefill_tp, \n    deploy_pd_prefill_pp AS deploy_pd_prefill_pp, \n    deploy_pd_prefill_ep_enable AS deploy_pd_prefill_ep_enable, \n    deploy_pd_prefill_args AS deploy_pd_prefill_args, \n    deploy_pd_prefill_env AS deploy_pd_prefill_env, \n    deploy_pd_decode_replicas AS deploy_pd_decode_replicas, \n    deploy_pd_decode_tp AS deploy_pd_decode_tp, \n    deploy_pd_decode_pp AS deploy_pd_decode_pp, \n    deploy_pd_decode_ep_enable AS deploy_pd_decode_ep_enable, \n    deploy_pd_decode_args AS deploy_pd_decode_args, \n    deploy_pd_decode_env AS deploy_pd_decode_env, \n    deploy_model_PVC_enable AS deploy_model_pvc_enable, \n    deploy_model_PVC_name AS deploy_model_pvc_name, \n    deploy_model_local_enable AS deploy_model_local_enable, \n    deploy_model_path AS deploy_model_path, \n    deploy_tp AS deploy_tp, \n    deploy_pp AS deploy_pp, \n    deploy_ep_enable AS deploy_ep_enable, \n    deploy_args AS deploy_args, \n    deploy_env AS deploy_env, \n    test_tokenizer AS test_tokenizer, \n    test_dataset AS test_dataset, \n    test_dataset_path AS test_dataset_path, \n    helm_name AS helm_name, \n    helm_version AS helm_version, \n    -- helm_values AS helm_values,\n    p10_TTFT_seconds, p25_TTFT_seconds, p50_TTFT_seconds, p66_TTFT_seconds, p75_TTFT_seconds, p80_TTFT_seconds, p90_TTFT_seconds, p95_TTFT_seconds, p98_TTFT_seconds, p99_TTFT_seconds, \n    p10_ITL_seconds, p25_ITL_seconds, p50_ITL_seconds, p66_ITL_seconds, p75_ITL_seconds, p80_ITL_seconds, p90_ITL_seconds, p95_ITL_seconds, p98_ITL_seconds, p99_ITL_seconds, \n    p10_TPOT_seconds, p25_TPOT_seconds, p50_TPOT_seconds, p66_TPOT_seconds, p75_TPOT_seconds, p80_TPOT_seconds, p90_TPOT_seconds, p95_TPOT_seconds, p98_TPOT_seconds, p99_TPOT_seconds, \n    p10_Latency_seconds, p25_Latency_seconds, p50_Latency_seconds, p66_Latency_seconds, p75_Latency_seconds, p80_Latency_seconds, p90_Latency_seconds, p95_Latency_seconds, p98_Latency_seconds, p99_Latency_seconds, \n    p10_Input_tokens, p25_Input_tokens, p50_Input_tokens, p66_Input_tokens, p75_Input_tokens, p80_Input_tokens, p90_Input_tokens, p95_Input_tokens, p98_Input_tokens, p99_Input_tokens, \n    p10_Output_tokens, p25_Output_tokens, p50_Output_tokens, p66_Output_tokens, p75_Output_tokens, p80_Output_tokens, p90_Output_tokens, p95_Output_tokens, p98_Output_tokens, p99_Output_tokens, \n    p10_Output_tok_per_s, p25_Output_tok_per_s, p50_Output_tok_per_s, p66_Output_tok_per_s, p75_Output_tok_per_s, p80_Output_tok_per_s, p90_Output_tok_per_s, p95_Output_tok_per_s, p98_Output_tok_per_s, p99_Output_tok_per_s, \n    p10_Total_tok_per_s, p25_Total_tok_per_s, p50_Total_tok_per_s, p66_Total_tok_per_s, p75_Total_tok_per_s, p80_Total_tok_per_s, p90_Total_tok_per_s, p95_Total_tok_per_s, p98_Total_tok_per_s, p99_Total_tok_per_s\n\nFROM ${table_name} \nWHERE \n    `metadata_name` IN (${metadata_name:sqlstring}) AND\n    `metadata_node_size` IN (${metadata_node_size:sqlstring}) AND \n    `metadata_gpu_per_node` IN (${metadata_gpu_per_node:sqlstring}) AND \n    `metadata_gpu_info` IN (${metadata_gpu_info:sqlstring}) AND \n    `deploy_model_name` IN (${deploy_model_name:sqlstring})   AND  \n    `deploy_engine_name` IN (${deploy_engine_name:sqlstring})  AND \n    `deploy_replicas` IN (${deploy_replicas:sqlstring}) AND \n    `deploy_group_size` IN (${deploy_group_size:sqlstring}) AND \n    `deploy_pd_enable` IN (${deploy_pd_enable:sqlstring}) AND \n    `deploy_pd_prefill_replicas` IN (${deploy_pd_prefill_replicas:sqlstring}) AND \n    `deploy_pd_prefill_tp` IN (${deploy_pd_prefill_tp:sqlstring}) AND \n    `deploy_pd_prefill_pp` IN (${deploy_pd_prefill_pp:sqlstring}) AND \n    `deploy_pd_prefill_ep_enable` IN (${deploy_pd_prefill_ep_enable:sqlstring})  AND  \n    `deploy_pd_decode_replicas` IN (${deploy_pd_decode_replicas:sqlstring}) AND \n    `deploy_pd_decode_tp` IN (${deploy_pd_decode_tp:sqlstring}) AND \n    `deploy_pd_decode_pp` IN (${deploy_pd_decode_pp:sqlstring}) AND \n    `deploy_pd_decode_ep_enable` IN (${deploy_pd_decode_ep_enable:sqlstring}) AND   \n    `deploy_tp` IN (${deploy_tp:sqlstring}) AND \n    `deploy_pp` IN (${deploy_pp:sqlstring}) AND \n    `deploy_ep_enable` IN (${deploy_ep_enable:sqlstring}) AND   \n    `test_ISL` IN (${test_ISL:sqlstring}) AND \n    `test_OSL` IN (${test_OSL:sqlstring}) AND \n    `test_dataset` IN (${test_dataset:sqlstring})  AND \n    `test_EOS` IN (${test_EOS:sqlstring}) AND \n    `concurrency` IN (${concurrency:sqlstring}) \nORDER BY `concurrency` ASC\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Throughput vs. Concurrency",
+      "type": "xychart"
+    },
+    {
+      "datasource": "${datasource}",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointShape": "circle",
+            "pointSize": {
+              "fixed": 5
+            },
+            "pointStrokeWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points+lines"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 7,
+      "maxPerRow": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "number_of_concurrency"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "output_token_throughput"
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.0.2",
+      "repeat": "metadata_name",
+      "repeatDirection": "h",
+      "targets": [
+        {
+          "datasource": "${datasource}",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \n    `Time taken for tests (s)` AS time_taken_for_tests, \n    `Number of concurrency` AS number_of_concurrency, \n    `Total requests` AS total_requests, \n    `Succeed requests` AS succeed_requests, \n    `Failed requests` AS failed_requests, \n    `Output token throughput (tok/s)` AS output_token_throughput, \n    `Total token throughput (tok/s)` AS total_token_throughput, \n    `Request throughput (req/s)` AS request_throughput, \n    `Average latency (s)` AS average_latency, \n    `Average time to first token (s)` AS avg_ttft, \n    `Average time per output token (s)` AS avg_tpot, \n    `Average input tokens per request` AS average_input_tokens_per_request, \n    `Average output tokens per request` AS average_output_tokens_per_request, \n    `Average package latency (s)` AS average_package_latency, \n    `Average package per request` AS average_package_per_request, \n    CAST(concurrency AS UNSIGNED) AS concurrency, \n    start_timestamp AS start_timestamp, \n    end_timestamp AS end_timestamp,\n    start_timestamp * 1000 AS start_timestamp_ms, \n    end_timestamp * 1000 AS end_timestamp_ms,\n    test_ISL AS test_isl, \n    test_OSL AS test_osl, \n    test_EOS AS test_eos, \n    num_requests AS num_requests,\n    id AS id, \n    metadata_name AS metadata_name, \n    metadata_node_size AS metadata_node_size, \n    metadata_gpu_per_node AS metadata_gpu_per_node, \n    metadata_gpu_info AS metadata_gpu_info, \n    deploy_model_name AS deploy_model_name, \n    deploy_engine_name AS deploy_engine_name, \n    deploy_engine_version AS deploy_engine_version, \n    deploy_engine_image AS deploy_engine_image, \n    deploy_replicas AS deploy_replicas, \n    deploy_group_size AS deploy_group_size, \n    deploy_pd_enable AS deploy_pd_enable, \n    deploy_pd_prefill_replicas AS deploy_pd_prefill_replicas, \n    deploy_pd_prefill_tp AS deploy_pd_prefill_tp, \n    deploy_pd_prefill_pp AS deploy_pd_prefill_pp, \n    deploy_pd_prefill_ep_enable AS deploy_pd_prefill_ep_enable, \n    deploy_pd_prefill_args AS deploy_pd_prefill_args, \n    deploy_pd_prefill_env AS deploy_pd_prefill_env, \n    deploy_pd_decode_replicas AS deploy_pd_decode_replicas, \n    deploy_pd_decode_tp AS deploy_pd_decode_tp, \n    deploy_pd_decode_pp AS deploy_pd_decode_pp, \n    deploy_pd_decode_ep_enable AS deploy_pd_decode_ep_enable, \n    deploy_pd_decode_args AS deploy_pd_decode_args, \n    deploy_pd_decode_env AS deploy_pd_decode_env, \n    deploy_model_PVC_enable AS deploy_model_pvc_enable, \n    deploy_model_PVC_name AS deploy_model_pvc_name, \n    deploy_model_local_enable AS deploy_model_local_enable, \n    deploy_model_path AS deploy_model_path, \n    deploy_tp AS deploy_tp, \n    deploy_pp AS deploy_pp, \n    deploy_ep_enable AS deploy_ep_enable, \n    deploy_args AS deploy_args, \n    deploy_env AS deploy_env, \n    test_tokenizer AS test_tokenizer, \n    test_dataset AS test_dataset, \n    test_dataset_path AS test_dataset_path, \n    helm_name AS helm_name, \n    helm_version AS helm_version, \n    -- helm_values AS helm_values,\n    p10_TTFT_seconds, p25_TTFT_seconds, p50_TTFT_seconds, p66_TTFT_seconds, p75_TTFT_seconds, p80_TTFT_seconds, p90_TTFT_seconds, p95_TTFT_seconds, p98_TTFT_seconds, p99_TTFT_seconds, \n    p10_ITL_seconds, p25_ITL_seconds, p50_ITL_seconds, p66_ITL_seconds, p75_ITL_seconds, p80_ITL_seconds, p90_ITL_seconds, p95_ITL_seconds, p98_ITL_seconds, p99_ITL_seconds, \n    p10_TPOT_seconds, p25_TPOT_seconds, p50_TPOT_seconds, p66_TPOT_seconds, p75_TPOT_seconds, p80_TPOT_seconds, p90_TPOT_seconds, p95_TPOT_seconds, p98_TPOT_seconds, p99_TPOT_seconds, \n    p10_Latency_seconds, p25_Latency_seconds, p50_Latency_seconds, p66_Latency_seconds, p75_Latency_seconds, p80_Latency_seconds, p90_Latency_seconds, p95_Latency_seconds, p98_Latency_seconds, p99_Latency_seconds, \n    p10_Input_tokens, p25_Input_tokens, p50_Input_tokens, p66_Input_tokens, p75_Input_tokens, p80_Input_tokens, p90_Input_tokens, p95_Input_tokens, p98_Input_tokens, p99_Input_tokens, \n    p10_Output_tokens, p25_Output_tokens, p50_Output_tokens, p66_Output_tokens, p75_Output_tokens, p80_Output_tokens, p90_Output_tokens, p95_Output_tokens, p98_Output_tokens, p99_Output_tokens, \n    p10_Output_tok_per_s, p25_Output_tok_per_s, p50_Output_tok_per_s, p66_Output_tok_per_s, p75_Output_tok_per_s, p80_Output_tok_per_s, p90_Output_tok_per_s, p95_Output_tok_per_s, p98_Output_tok_per_s, p99_Output_tok_per_s, \n    p10_Total_tok_per_s, p25_Total_tok_per_s, p50_Total_tok_per_s, p66_Total_tok_per_s, p75_Total_tok_per_s, p80_Total_tok_per_s, p90_Total_tok_per_s, p95_Total_tok_per_s, p98_Total_tok_per_s, p99_Total_tok_per_s\n\nFROM ${table_name} \nWHERE \n    `metadata_name` IN (${metadata_name:sqlstring}) AND\n    `metadata_node_size` IN (${metadata_node_size:sqlstring}) AND \n    `metadata_gpu_per_node` IN (${metadata_gpu_per_node:sqlstring}) AND \n    `metadata_gpu_info` IN (${metadata_gpu_info:sqlstring}) AND \n    `deploy_model_name` IN (${deploy_model_name:sqlstring})   AND  \n    `deploy_engine_name` IN (${deploy_engine_name:sqlstring})  AND \n    `deploy_replicas` IN (${deploy_replicas:sqlstring}) AND \n    `deploy_group_size` IN (${deploy_group_size:sqlstring}) AND \n    `deploy_pd_enable` IN (${deploy_pd_enable:sqlstring}) AND \n    `deploy_pd_prefill_replicas` IN (${deploy_pd_prefill_replicas:sqlstring}) AND \n    `deploy_pd_prefill_tp` IN (${deploy_pd_prefill_tp:sqlstring}) AND \n    `deploy_pd_prefill_pp` IN (${deploy_pd_prefill_pp:sqlstring}) AND \n    `deploy_pd_prefill_ep_enable` IN (${deploy_pd_prefill_ep_enable:sqlstring})  AND  \n    `deploy_pd_decode_replicas` IN (${deploy_pd_decode_replicas:sqlstring}) AND \n    `deploy_pd_decode_tp` IN (${deploy_pd_decode_tp:sqlstring}) AND \n    `deploy_pd_decode_pp` IN (${deploy_pd_decode_pp:sqlstring}) AND \n    `deploy_pd_decode_ep_enable` IN (${deploy_pd_decode_ep_enable:sqlstring}) AND   \n    `deploy_tp` IN (${deploy_tp:sqlstring}) AND \n    `deploy_pp` IN (${deploy_pp:sqlstring}) AND \n    `deploy_ep_enable` IN (${deploy_ep_enable:sqlstring}) AND   \n    `test_ISL` IN (${test_ISL:sqlstring}) AND \n    `test_OSL` IN (${test_OSL:sqlstring}) AND \n    `test_dataset` IN (${test_dataset:sqlstring})  AND \n    `test_EOS` IN (${test_EOS:sqlstring}) AND \n    `concurrency` IN (${concurrency:sqlstring}) \nORDER BY `concurrency` ASC\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Output Throughput vs. Concurrency",
+      "type": "xychart"
+    },
+    {
+      "datasource": "${datasource}",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointShape": "circle",
+            "pointSize": {
+              "fixed": 5
+            },
+            "pointStrokeWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points+lines"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "concurrency"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "average_latency"
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.0.2",
+      "targets": [
+        {
+          "datasource": "${datasource}",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \n    `Time taken for tests (s)` AS time_taken_for_tests, \n    `Number of concurrency` AS number_of_concurrency, \n    `Total requests` AS total_requests, \n    `Succeed requests` AS succeed_requests, \n    `Failed requests` AS failed_requests, \n    `Output token throughput (tok/s)` AS output_token_throughput, \n    `Total token throughput (tok/s)` AS total_token_throughput, \n    `Request throughput (req/s)` AS request_throughput, \n    `Average latency (s)` AS average_latency, \n    `Average time to first token (s)` AS avg_ttft, \n    `Average time per output token (s)` AS avg_tpot, \n    `Average input tokens per request` AS average_input_tokens_per_request, \n    `Average output tokens per request` AS average_output_tokens_per_request, \n    `Average package latency (s)` AS average_package_latency, \n    `Average package per request` AS average_package_per_request, \n    CAST(concurrency AS UNSIGNED) AS concurrency, \n    start_timestamp AS start_timestamp, \n    end_timestamp AS end_timestamp,\n    start_timestamp * 1000 AS start_timestamp_ms, \n    end_timestamp * 1000 AS end_timestamp_ms,\n    test_ISL AS test_isl, \n    test_OSL AS test_osl, \n    test_EOS AS test_eos, \n    num_requests AS num_requests,\n    id AS id, \n    metadata_name AS metadata_name, \n    metadata_node_size AS metadata_node_size, \n    metadata_gpu_per_node AS metadata_gpu_per_node, \n    metadata_gpu_info AS metadata_gpu_info, \n    deploy_model_name AS deploy_model_name, \n    deploy_engine_name AS deploy_engine_name, \n    deploy_engine_version AS deploy_engine_version, \n    deploy_engine_image AS deploy_engine_image, \n    deploy_replicas AS deploy_replicas, \n    deploy_group_size AS deploy_group_size, \n    deploy_pd_enable AS deploy_pd_enable, \n    deploy_pd_prefill_replicas AS deploy_pd_prefill_replicas, \n    deploy_pd_prefill_tp AS deploy_pd_prefill_tp, \n    deploy_pd_prefill_pp AS deploy_pd_prefill_pp, \n    deploy_pd_prefill_ep_enable AS deploy_pd_prefill_ep_enable, \n    deploy_pd_prefill_args AS deploy_pd_prefill_args, \n    deploy_pd_prefill_env AS deploy_pd_prefill_env, \n    deploy_pd_decode_replicas AS deploy_pd_decode_replicas, \n    deploy_pd_decode_tp AS deploy_pd_decode_tp, \n    deploy_pd_decode_pp AS deploy_pd_decode_pp, \n    deploy_pd_decode_ep_enable AS deploy_pd_decode_ep_enable, \n    deploy_pd_decode_args AS deploy_pd_decode_args, \n    deploy_pd_decode_env AS deploy_pd_decode_env, \n    deploy_model_PVC_enable AS deploy_model_pvc_enable, \n    deploy_model_PVC_name AS deploy_model_pvc_name, \n    deploy_model_local_enable AS deploy_model_local_enable, \n    deploy_model_path AS deploy_model_path, \n    deploy_tp AS deploy_tp, \n    deploy_pp AS deploy_pp, \n    deploy_ep_enable AS deploy_ep_enable, \n    deploy_args AS deploy_args, \n    deploy_env AS deploy_env, \n    test_tokenizer AS test_tokenizer, \n    test_dataset AS test_dataset, \n    test_dataset_path AS test_dataset_path, \n    helm_name AS helm_name, \n    helm_version AS helm_version, \n    -- helm_values AS helm_values,\n    p10_TTFT_seconds, p25_TTFT_seconds, p50_TTFT_seconds, p66_TTFT_seconds, p75_TTFT_seconds, p80_TTFT_seconds, p90_TTFT_seconds, p95_TTFT_seconds, p98_TTFT_seconds, p99_TTFT_seconds, \n    p10_ITL_seconds, p25_ITL_seconds, p50_ITL_seconds, p66_ITL_seconds, p75_ITL_seconds, p80_ITL_seconds, p90_ITL_seconds, p95_ITL_seconds, p98_ITL_seconds, p99_ITL_seconds, \n    p10_TPOT_seconds, p25_TPOT_seconds, p50_TPOT_seconds, p66_TPOT_seconds, p75_TPOT_seconds, p80_TPOT_seconds, p90_TPOT_seconds, p95_TPOT_seconds, p98_TPOT_seconds, p99_TPOT_seconds, \n    p10_Latency_seconds, p25_Latency_seconds, p50_Latency_seconds, p66_Latency_seconds, p75_Latency_seconds, p80_Latency_seconds, p90_Latency_seconds, p95_Latency_seconds, p98_Latency_seconds, p99_Latency_seconds, \n    p10_Input_tokens, p25_Input_tokens, p50_Input_tokens, p66_Input_tokens, p75_Input_tokens, p80_Input_tokens, p90_Input_tokens, p95_Input_tokens, p98_Input_tokens, p99_Input_tokens, \n    p10_Output_tokens, p25_Output_tokens, p50_Output_tokens, p66_Output_tokens, p75_Output_tokens, p80_Output_tokens, p90_Output_tokens, p95_Output_tokens, p98_Output_tokens, p99_Output_tokens, \n    p10_Output_tok_per_s, p25_Output_tok_per_s, p50_Output_tok_per_s, p66_Output_tok_per_s, p75_Output_tok_per_s, p80_Output_tok_per_s, p90_Output_tok_per_s, p95_Output_tok_per_s, p98_Output_tok_per_s, p99_Output_tok_per_s, \n    p10_Total_tok_per_s, p25_Total_tok_per_s, p50_Total_tok_per_s, p66_Total_tok_per_s, p75_Total_tok_per_s, p80_Total_tok_per_s, p90_Total_tok_per_s, p95_Total_tok_per_s, p98_Total_tok_per_s, p99_Total_tok_per_s\n\nFROM ${table_name} \nWHERE \n    `metadata_name` IN (${metadata_name:sqlstring}) AND\n    `metadata_node_size` IN (${metadata_node_size:sqlstring}) AND \n    `metadata_gpu_per_node` IN (${metadata_gpu_per_node:sqlstring}) AND \n    `metadata_gpu_info` IN (${metadata_gpu_info:sqlstring}) AND \n    `deploy_model_name` IN (${deploy_model_name:sqlstring})   AND  \n    `deploy_engine_name` IN (${deploy_engine_name:sqlstring})  AND \n    `deploy_replicas` IN (${deploy_replicas:sqlstring}) AND \n    `deploy_group_size` IN (${deploy_group_size:sqlstring}) AND \n    `deploy_pd_enable` IN (${deploy_pd_enable:sqlstring}) AND \n    `deploy_pd_prefill_replicas` IN (${deploy_pd_prefill_replicas:sqlstring}) AND \n    `deploy_pd_prefill_tp` IN (${deploy_pd_prefill_tp:sqlstring}) AND \n    `deploy_pd_prefill_pp` IN (${deploy_pd_prefill_pp:sqlstring}) AND \n    `deploy_pd_prefill_ep_enable` IN (${deploy_pd_prefill_ep_enable:sqlstring})  AND  \n    `deploy_pd_decode_replicas` IN (${deploy_pd_decode_replicas:sqlstring}) AND \n    `deploy_pd_decode_tp` IN (${deploy_pd_decode_tp:sqlstring}) AND \n    `deploy_pd_decode_pp` IN (${deploy_pd_decode_pp:sqlstring}) AND \n    `deploy_pd_decode_ep_enable` IN (${deploy_pd_decode_ep_enable:sqlstring}) AND   \n    `deploy_tp` IN (${deploy_tp:sqlstring}) AND \n    `deploy_pp` IN (${deploy_pp:sqlstring}) AND \n    `deploy_ep_enable` IN (${deploy_ep_enable:sqlstring}) AND   \n    `test_ISL` IN (${test_ISL:sqlstring}) AND \n    `test_OSL` IN (${test_OSL:sqlstring}) AND \n    `test_dataset` IN (${test_dataset:sqlstring})  AND \n    `test_EOS` IN (${test_EOS:sqlstring}) AND \n    `concurrency` IN (${concurrency:sqlstring}) \nORDER BY `concurrency` ASC\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Latency vs. Concurrency",
+      "type": "xychart"
+    },
+    {
+      "datasource": "${datasource}",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointShape": "circle",
+            "pointSize": {
+              "fixed": 5
+            },
+            "pointStrokeWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points+lines"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "concurrency"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "avg_ttft"
+              }
+            }
+          },
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "concurrency"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "avg_tpot"
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.0.2",
+      "targets": [
+        {
+          "datasource": "${datasource}",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \n    `Time taken for tests (s)` AS time_taken_for_tests, \n    `Number of concurrency` AS number_of_concurrency, \n    `Total requests` AS total_requests, \n    `Succeed requests` AS succeed_requests, \n    `Failed requests` AS failed_requests, \n    `Output token throughput (tok/s)` AS output_token_throughput, \n    `Total token throughput (tok/s)` AS total_token_throughput, \n    `Request throughput (req/s)` AS request_throughput, \n    `Average latency (s)` AS average_latency, \n    `Average time to first token (s)` AS avg_ttft, \n    `Average time per output token (s)` AS avg_tpot, \n    `Average input tokens per request` AS average_input_tokens_per_request, \n    `Average output tokens per request` AS average_output_tokens_per_request, \n    `Average package latency (s)` AS average_package_latency, \n    `Average package per request` AS average_package_per_request, \n    CAST(concurrency AS UNSIGNED) AS concurrency, \n    start_timestamp AS start_timestamp, \n    end_timestamp AS end_timestamp,\n    start_timestamp * 1000 AS start_timestamp_ms, \n    end_timestamp * 1000 AS end_timestamp_ms,\n    test_ISL AS test_isl, \n    test_OSL AS test_osl, \n    test_EOS AS test_eos, \n    num_requests AS num_requests,\n    id AS id, \n    metadata_name AS metadata_name, \n    metadata_node_size AS metadata_node_size, \n    metadata_gpu_per_node AS metadata_gpu_per_node, \n    metadata_gpu_info AS metadata_gpu_info, \n    deploy_model_name AS deploy_model_name, \n    deploy_engine_name AS deploy_engine_name, \n    deploy_engine_version AS deploy_engine_version, \n    deploy_engine_image AS deploy_engine_image, \n    deploy_replicas AS deploy_replicas, \n    deploy_group_size AS deploy_group_size, \n    deploy_pd_enable AS deploy_pd_enable, \n    deploy_pd_prefill_replicas AS deploy_pd_prefill_replicas, \n    deploy_pd_prefill_tp AS deploy_pd_prefill_tp, \n    deploy_pd_prefill_pp AS deploy_pd_prefill_pp, \n    deploy_pd_prefill_ep_enable AS deploy_pd_prefill_ep_enable, \n    deploy_pd_prefill_args AS deploy_pd_prefill_args, \n    deploy_pd_prefill_env AS deploy_pd_prefill_env, \n    deploy_pd_decode_replicas AS deploy_pd_decode_replicas, \n    deploy_pd_decode_tp AS deploy_pd_decode_tp, \n    deploy_pd_decode_pp AS deploy_pd_decode_pp, \n    deploy_pd_decode_ep_enable AS deploy_pd_decode_ep_enable, \n    deploy_pd_decode_args AS deploy_pd_decode_args, \n    deploy_pd_decode_env AS deploy_pd_decode_env, \n    deploy_model_PVC_enable AS deploy_model_pvc_enable, \n    deploy_model_PVC_name AS deploy_model_pvc_name, \n    deploy_model_local_enable AS deploy_model_local_enable, \n    deploy_model_path AS deploy_model_path, \n    deploy_tp AS deploy_tp, \n    deploy_pp AS deploy_pp, \n    deploy_ep_enable AS deploy_ep_enable, \n    deploy_args AS deploy_args, \n    deploy_env AS deploy_env, \n    test_tokenizer AS test_tokenizer, \n    test_dataset AS test_dataset, \n    test_dataset_path AS test_dataset_path, \n    helm_name AS helm_name, \n    helm_version AS helm_version, \n    -- helm_values AS helm_values,\n    p10_TTFT_seconds, p25_TTFT_seconds, p50_TTFT_seconds, p66_TTFT_seconds, p75_TTFT_seconds, p80_TTFT_seconds, p90_TTFT_seconds, p95_TTFT_seconds, p98_TTFT_seconds, p99_TTFT_seconds, \n    p10_ITL_seconds, p25_ITL_seconds, p50_ITL_seconds, p66_ITL_seconds, p75_ITL_seconds, p80_ITL_seconds, p90_ITL_seconds, p95_ITL_seconds, p98_ITL_seconds, p99_ITL_seconds, \n    p10_TPOT_seconds, p25_TPOT_seconds, p50_TPOT_seconds, p66_TPOT_seconds, p75_TPOT_seconds, p80_TPOT_seconds, p90_TPOT_seconds, p95_TPOT_seconds, p98_TPOT_seconds, p99_TPOT_seconds, \n    p10_Latency_seconds, p25_Latency_seconds, p50_Latency_seconds, p66_Latency_seconds, p75_Latency_seconds, p80_Latency_seconds, p90_Latency_seconds, p95_Latency_seconds, p98_Latency_seconds, p99_Latency_seconds, \n    p10_Input_tokens, p25_Input_tokens, p50_Input_tokens, p66_Input_tokens, p75_Input_tokens, p80_Input_tokens, p90_Input_tokens, p95_Input_tokens, p98_Input_tokens, p99_Input_tokens, \n    p10_Output_tokens, p25_Output_tokens, p50_Output_tokens, p66_Output_tokens, p75_Output_tokens, p80_Output_tokens, p90_Output_tokens, p95_Output_tokens, p98_Output_tokens, p99_Output_tokens, \n    p10_Output_tok_per_s, p25_Output_tok_per_s, p50_Output_tok_per_s, p66_Output_tok_per_s, p75_Output_tok_per_s, p80_Output_tok_per_s, p90_Output_tok_per_s, p95_Output_tok_per_s, p98_Output_tok_per_s, p99_Output_tok_per_s, \n    p10_Total_tok_per_s, p25_Total_tok_per_s, p50_Total_tok_per_s, p66_Total_tok_per_s, p75_Total_tok_per_s, p80_Total_tok_per_s, p90_Total_tok_per_s, p95_Total_tok_per_s, p98_Total_tok_per_s, p99_Total_tok_per_s\n\nFROM ${table_name} \nWHERE \n    `metadata_name` IN (${metadata_name:sqlstring}) AND\n    `metadata_node_size` IN (${metadata_node_size:sqlstring}) AND \n    `metadata_gpu_per_node` IN (${metadata_gpu_per_node:sqlstring}) AND \n    `metadata_gpu_info` IN (${metadata_gpu_info:sqlstring}) AND \n    `deploy_model_name` IN (${deploy_model_name:sqlstring})   AND  \n    `deploy_engine_name` IN (${deploy_engine_name:sqlstring})  AND \n    `deploy_replicas` IN (${deploy_replicas:sqlstring}) AND \n    `deploy_group_size` IN (${deploy_group_size:sqlstring}) AND \n    `deploy_pd_enable` IN (${deploy_pd_enable:sqlstring}) AND \n    `deploy_pd_prefill_replicas` IN (${deploy_pd_prefill_replicas:sqlstring}) AND \n    `deploy_pd_prefill_tp` IN (${deploy_pd_prefill_tp:sqlstring}) AND \n    `deploy_pd_prefill_pp` IN (${deploy_pd_prefill_pp:sqlstring}) AND \n    `deploy_pd_prefill_ep_enable` IN (${deploy_pd_prefill_ep_enable:sqlstring})  AND  \n    `deploy_pd_decode_replicas` IN (${deploy_pd_decode_replicas:sqlstring}) AND \n    `deploy_pd_decode_tp` IN (${deploy_pd_decode_tp:sqlstring}) AND \n    `deploy_pd_decode_pp` IN (${deploy_pd_decode_pp:sqlstring}) AND \n    `deploy_pd_decode_ep_enable` IN (${deploy_pd_decode_ep_enable:sqlstring}) AND   \n    `deploy_tp` IN (${deploy_tp:sqlstring}) AND \n    `deploy_pp` IN (${deploy_pp:sqlstring}) AND \n    `deploy_ep_enable` IN (${deploy_ep_enable:sqlstring}) AND   \n    `test_ISL` IN (${test_ISL:sqlstring}) AND \n    `test_OSL` IN (${test_OSL:sqlstring}) AND \n    `test_dataset` IN (${test_dataset:sqlstring})  AND \n    `test_EOS` IN (${test_EOS:sqlstring}) AND \n    `concurrency` IN (${concurrency:sqlstring}) \nORDER BY `concurrency` ASC\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "TTFT & TPOT vs. Concurrency",
+      "type": "xychart"
+    },
+    {
+      "datasource": "${datasource}",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointShape": "circle",
+            "pointSize": {
+              "fixed": 5
+            },
+            "pointStrokeWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points+lines"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "concurrency"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "avg_ttft"
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.0.2",
+      "targets": [
+        {
+          "datasource": "${datasource}",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \n    `Time taken for tests (s)` AS time_taken_for_tests, \n    `Number of concurrency` AS number_of_concurrency, \n    `Total requests` AS total_requests, \n    `Succeed requests` AS succeed_requests, \n    `Failed requests` AS failed_requests, \n    `Output token throughput (tok/s)` AS output_token_throughput, \n    `Total token throughput (tok/s)` AS total_token_throughput, \n    `Request throughput (req/s)` AS request_throughput, \n    `Average latency (s)` AS average_latency, \n    `Average time to first token (s)` AS avg_ttft, \n    `Average time per output token (s)` AS avg_tpot, \n    `Average input tokens per request` AS average_input_tokens_per_request, \n    `Average output tokens per request` AS average_output_tokens_per_request, \n    `Average package latency (s)` AS average_package_latency, \n    `Average package per request` AS average_package_per_request, \n    CAST(concurrency AS UNSIGNED) AS concurrency, \n    start_timestamp AS start_timestamp, \n    end_timestamp AS end_timestamp,\n    start_timestamp * 1000 AS start_timestamp_ms, \n    end_timestamp * 1000 AS end_timestamp_ms,\n    test_ISL AS test_isl, \n    test_OSL AS test_osl, \n    test_EOS AS test_eos, \n    num_requests AS num_requests,\n    id AS id, \n    metadata_name AS metadata_name, \n    metadata_node_size AS metadata_node_size, \n    metadata_gpu_per_node AS metadata_gpu_per_node, \n    metadata_gpu_info AS metadata_gpu_info, \n    deploy_model_name AS deploy_model_name, \n    deploy_engine_name AS deploy_engine_name, \n    deploy_engine_version AS deploy_engine_version, \n    deploy_engine_image AS deploy_engine_image, \n    deploy_replicas AS deploy_replicas, \n    deploy_group_size AS deploy_group_size, \n    deploy_pd_enable AS deploy_pd_enable, \n    deploy_pd_prefill_replicas AS deploy_pd_prefill_replicas, \n    deploy_pd_prefill_tp AS deploy_pd_prefill_tp, \n    deploy_pd_prefill_pp AS deploy_pd_prefill_pp, \n    deploy_pd_prefill_ep_enable AS deploy_pd_prefill_ep_enable, \n    deploy_pd_prefill_args AS deploy_pd_prefill_args, \n    deploy_pd_prefill_env AS deploy_pd_prefill_env, \n    deploy_pd_decode_replicas AS deploy_pd_decode_replicas, \n    deploy_pd_decode_tp AS deploy_pd_decode_tp, \n    deploy_pd_decode_pp AS deploy_pd_decode_pp, \n    deploy_pd_decode_ep_enable AS deploy_pd_decode_ep_enable, \n    deploy_pd_decode_args AS deploy_pd_decode_args, \n    deploy_pd_decode_env AS deploy_pd_decode_env, \n    deploy_model_PVC_enable AS deploy_model_pvc_enable, \n    deploy_model_PVC_name AS deploy_model_pvc_name, \n    deploy_model_local_enable AS deploy_model_local_enable, \n    deploy_model_path AS deploy_model_path, \n    deploy_tp AS deploy_tp, \n    deploy_pp AS deploy_pp, \n    deploy_ep_enable AS deploy_ep_enable, \n    deploy_args AS deploy_args, \n    deploy_env AS deploy_env, \n    test_tokenizer AS test_tokenizer, \n    test_dataset AS test_dataset, \n    test_dataset_path AS test_dataset_path, \n    helm_name AS helm_name, \n    helm_version AS helm_version, \n    -- helm_values AS helm_values,\n    p10_TTFT_seconds, p25_TTFT_seconds, p50_TTFT_seconds, p66_TTFT_seconds, p75_TTFT_seconds, p80_TTFT_seconds, p90_TTFT_seconds, p95_TTFT_seconds, p98_TTFT_seconds, p99_TTFT_seconds, \n    p10_ITL_seconds, p25_ITL_seconds, p50_ITL_seconds, p66_ITL_seconds, p75_ITL_seconds, p80_ITL_seconds, p90_ITL_seconds, p95_ITL_seconds, p98_ITL_seconds, p99_ITL_seconds, \n    p10_TPOT_seconds, p25_TPOT_seconds, p50_TPOT_seconds, p66_TPOT_seconds, p75_TPOT_seconds, p80_TPOT_seconds, p90_TPOT_seconds, p95_TPOT_seconds, p98_TPOT_seconds, p99_TPOT_seconds, \n    p10_Latency_seconds, p25_Latency_seconds, p50_Latency_seconds, p66_Latency_seconds, p75_Latency_seconds, p80_Latency_seconds, p90_Latency_seconds, p95_Latency_seconds, p98_Latency_seconds, p99_Latency_seconds, \n    p10_Input_tokens, p25_Input_tokens, p50_Input_tokens, p66_Input_tokens, p75_Input_tokens, p80_Input_tokens, p90_Input_tokens, p95_Input_tokens, p98_Input_tokens, p99_Input_tokens, \n    p10_Output_tokens, p25_Output_tokens, p50_Output_tokens, p66_Output_tokens, p75_Output_tokens, p80_Output_tokens, p90_Output_tokens, p95_Output_tokens, p98_Output_tokens, p99_Output_tokens, \n    p10_Output_tok_per_s, p25_Output_tok_per_s, p50_Output_tok_per_s, p66_Output_tok_per_s, p75_Output_tok_per_s, p80_Output_tok_per_s, p90_Output_tok_per_s, p95_Output_tok_per_s, p98_Output_tok_per_s, p99_Output_tok_per_s, \n    p10_Total_tok_per_s, p25_Total_tok_per_s, p50_Total_tok_per_s, p66_Total_tok_per_s, p75_Total_tok_per_s, p80_Total_tok_per_s, p90_Total_tok_per_s, p95_Total_tok_per_s, p98_Total_tok_per_s, p99_Total_tok_per_s\n\nFROM ${table_name} \nWHERE \n    `metadata_name` IN (${metadata_name:sqlstring}) AND\n    `metadata_node_size` IN (${metadata_node_size:sqlstring}) AND \n    `metadata_gpu_per_node` IN (${metadata_gpu_per_node:sqlstring}) AND \n    `metadata_gpu_info` IN (${metadata_gpu_info:sqlstring}) AND \n    `deploy_model_name` IN (${deploy_model_name:sqlstring})   AND  \n    `deploy_engine_name` IN (${deploy_engine_name:sqlstring})  AND \n    `deploy_replicas` IN (${deploy_replicas:sqlstring}) AND \n    `deploy_group_size` IN (${deploy_group_size:sqlstring}) AND \n    `deploy_pd_enable` IN (${deploy_pd_enable:sqlstring}) AND \n    `deploy_pd_prefill_replicas` IN (${deploy_pd_prefill_replicas:sqlstring}) AND \n    `deploy_pd_prefill_tp` IN (${deploy_pd_prefill_tp:sqlstring}) AND \n    `deploy_pd_prefill_pp` IN (${deploy_pd_prefill_pp:sqlstring}) AND \n    `deploy_pd_prefill_ep_enable` IN (${deploy_pd_prefill_ep_enable:sqlstring})  AND  \n    `deploy_pd_decode_replicas` IN (${deploy_pd_decode_replicas:sqlstring}) AND \n    `deploy_pd_decode_tp` IN (${deploy_pd_decode_tp:sqlstring}) AND \n    `deploy_pd_decode_pp` IN (${deploy_pd_decode_pp:sqlstring}) AND \n    `deploy_pd_decode_ep_enable` IN (${deploy_pd_decode_ep_enable:sqlstring}) AND   \n    `deploy_tp` IN (${deploy_tp:sqlstring}) AND \n    `deploy_pp` IN (${deploy_pp:sqlstring}) AND \n    `deploy_ep_enable` IN (${deploy_ep_enable:sqlstring}) AND   \n    `test_ISL` IN (${test_ISL:sqlstring}) AND \n    `test_OSL` IN (${test_OSL:sqlstring}) AND \n    `test_dataset` IN (${test_dataset:sqlstring})  AND \n    `test_EOS` IN (${test_EOS:sqlstring}) AND \n    `concurrency` IN (${concurrency:sqlstring}) \nORDER BY `concurrency` ASC\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "TTFT vs. Concurrency",
+      "type": "xychart"
+    },
+    {
+      "datasource": "${datasource}",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointShape": "circle",
+            "pointSize": {
+              "fixed": 5
+            },
+            "pointStrokeWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points+lines"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "concurrency"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "avg_tpot"
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.0.2",
+      "targets": [
+        {
+          "datasource": "${datasource}",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \n    `Time taken for tests (s)` AS time_taken_for_tests, \n    `Number of concurrency` AS number_of_concurrency, \n    `Total requests` AS total_requests, \n    `Succeed requests` AS succeed_requests, \n    `Failed requests` AS failed_requests, \n    `Output token throughput (tok/s)` AS output_token_throughput, \n    `Total token throughput (tok/s)` AS total_token_throughput, \n    `Request throughput (req/s)` AS request_throughput, \n    `Average latency (s)` AS average_latency, \n    `Average time to first token (s)` AS avg_ttft, \n    `Average time per output token (s)` AS avg_tpot, \n    `Average input tokens per request` AS average_input_tokens_per_request, \n    `Average output tokens per request` AS average_output_tokens_per_request, \n    `Average package latency (s)` AS average_package_latency, \n    `Average package per request` AS average_package_per_request, \n    CAST(concurrency AS UNSIGNED) AS concurrency, \n    start_timestamp AS start_timestamp, \n    end_timestamp AS end_timestamp,\n    start_timestamp * 1000 AS start_timestamp_ms, \n    end_timestamp * 1000 AS end_timestamp_ms,\n    test_ISL AS test_isl, \n    test_OSL AS test_osl, \n    test_EOS AS test_eos, \n    num_requests AS num_requests,\n    id AS id, \n    metadata_name AS metadata_name, \n    metadata_node_size AS metadata_node_size, \n    metadata_gpu_per_node AS metadata_gpu_per_node, \n    metadata_gpu_info AS metadata_gpu_info, \n    deploy_model_name AS deploy_model_name, \n    deploy_engine_name AS deploy_engine_name, \n    deploy_engine_version AS deploy_engine_version, \n    deploy_engine_image AS deploy_engine_image, \n    deploy_replicas AS deploy_replicas, \n    deploy_group_size AS deploy_group_size, \n    deploy_pd_enable AS deploy_pd_enable, \n    deploy_pd_prefill_replicas AS deploy_pd_prefill_replicas, \n    deploy_pd_prefill_tp AS deploy_pd_prefill_tp, \n    deploy_pd_prefill_pp AS deploy_pd_prefill_pp, \n    deploy_pd_prefill_ep_enable AS deploy_pd_prefill_ep_enable, \n    deploy_pd_prefill_args AS deploy_pd_prefill_args, \n    deploy_pd_prefill_env AS deploy_pd_prefill_env, \n    deploy_pd_decode_replicas AS deploy_pd_decode_replicas, \n    deploy_pd_decode_tp AS deploy_pd_decode_tp, \n    deploy_pd_decode_pp AS deploy_pd_decode_pp, \n    deploy_pd_decode_ep_enable AS deploy_pd_decode_ep_enable, \n    deploy_pd_decode_args AS deploy_pd_decode_args, \n    deploy_pd_decode_env AS deploy_pd_decode_env, \n    deploy_model_PVC_enable AS deploy_model_pvc_enable, \n    deploy_model_PVC_name AS deploy_model_pvc_name, \n    deploy_model_local_enable AS deploy_model_local_enable, \n    deploy_model_path AS deploy_model_path, \n    deploy_tp AS deploy_tp, \n    deploy_pp AS deploy_pp, \n    deploy_ep_enable AS deploy_ep_enable, \n    deploy_args AS deploy_args, \n    deploy_env AS deploy_env, \n    test_tokenizer AS test_tokenizer, \n    test_dataset AS test_dataset, \n    test_dataset_path AS test_dataset_path, \n    helm_name AS helm_name, \n    helm_version AS helm_version, \n    -- helm_values AS helm_values,\n    p10_TTFT_seconds, p25_TTFT_seconds, p50_TTFT_seconds, p66_TTFT_seconds, p75_TTFT_seconds, p80_TTFT_seconds, p90_TTFT_seconds, p95_TTFT_seconds, p98_TTFT_seconds, p99_TTFT_seconds, \n    p10_ITL_seconds, p25_ITL_seconds, p50_ITL_seconds, p66_ITL_seconds, p75_ITL_seconds, p80_ITL_seconds, p90_ITL_seconds, p95_ITL_seconds, p98_ITL_seconds, p99_ITL_seconds, \n    p10_TPOT_seconds, p25_TPOT_seconds, p50_TPOT_seconds, p66_TPOT_seconds, p75_TPOT_seconds, p80_TPOT_seconds, p90_TPOT_seconds, p95_TPOT_seconds, p98_TPOT_seconds, p99_TPOT_seconds, \n    p10_Latency_seconds, p25_Latency_seconds, p50_Latency_seconds, p66_Latency_seconds, p75_Latency_seconds, p80_Latency_seconds, p90_Latency_seconds, p95_Latency_seconds, p98_Latency_seconds, p99_Latency_seconds, \n    p10_Input_tokens, p25_Input_tokens, p50_Input_tokens, p66_Input_tokens, p75_Input_tokens, p80_Input_tokens, p90_Input_tokens, p95_Input_tokens, p98_Input_tokens, p99_Input_tokens, \n    p10_Output_tokens, p25_Output_tokens, p50_Output_tokens, p66_Output_tokens, p75_Output_tokens, p80_Output_tokens, p90_Output_tokens, p95_Output_tokens, p98_Output_tokens, p99_Output_tokens, \n    p10_Output_tok_per_s, p25_Output_tok_per_s, p50_Output_tok_per_s, p66_Output_tok_per_s, p75_Output_tok_per_s, p80_Output_tok_per_s, p90_Output_tok_per_s, p95_Output_tok_per_s, p98_Output_tok_per_s, p99_Output_tok_per_s, \n    p10_Total_tok_per_s, p25_Total_tok_per_s, p50_Total_tok_per_s, p66_Total_tok_per_s, p75_Total_tok_per_s, p80_Total_tok_per_s, p90_Total_tok_per_s, p95_Total_tok_per_s, p98_Total_tok_per_s, p99_Total_tok_per_s\n\nFROM ${table_name} \nWHERE \n    `metadata_name` IN (${metadata_name:sqlstring}) AND\n    `metadata_node_size` IN (${metadata_node_size:sqlstring}) AND \n    `metadata_gpu_per_node` IN (${metadata_gpu_per_node:sqlstring}) AND \n    `metadata_gpu_info` IN (${metadata_gpu_info:sqlstring}) AND \n    `deploy_model_name` IN (${deploy_model_name:sqlstring})   AND  \n    `deploy_engine_name` IN (${deploy_engine_name:sqlstring})  AND \n    `deploy_replicas` IN (${deploy_replicas:sqlstring}) AND \n    `deploy_group_size` IN (${deploy_group_size:sqlstring}) AND \n    `deploy_pd_enable` IN (${deploy_pd_enable:sqlstring}) AND \n    `deploy_pd_prefill_replicas` IN (${deploy_pd_prefill_replicas:sqlstring}) AND \n    `deploy_pd_prefill_tp` IN (${deploy_pd_prefill_tp:sqlstring}) AND \n    `deploy_pd_prefill_pp` IN (${deploy_pd_prefill_pp:sqlstring}) AND \n    `deploy_pd_prefill_ep_enable` IN (${deploy_pd_prefill_ep_enable:sqlstring})  AND  \n    `deploy_pd_decode_replicas` IN (${deploy_pd_decode_replicas:sqlstring}) AND \n    `deploy_pd_decode_tp` IN (${deploy_pd_decode_tp:sqlstring}) AND \n    `deploy_pd_decode_pp` IN (${deploy_pd_decode_pp:sqlstring}) AND \n    `deploy_pd_decode_ep_enable` IN (${deploy_pd_decode_ep_enable:sqlstring}) AND   \n    `deploy_tp` IN (${deploy_tp:sqlstring}) AND \n    `deploy_pp` IN (${deploy_pp:sqlstring}) AND \n    `deploy_ep_enable` IN (${deploy_ep_enable:sqlstring}) AND   \n    `test_ISL` IN (${test_ISL:sqlstring}) AND \n    `test_OSL` IN (${test_OSL:sqlstring}) AND \n    `test_dataset` IN (${test_dataset:sqlstring})  AND \n    `test_EOS` IN (${test_EOS:sqlstring}) AND \n    `concurrency` IN (${concurrency:sqlstring}) \nORDER BY `concurrency` ASC\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "TPOT vs. Concurrency",
+      "type": "xychart"
+    },
+    {
+      "datasource": "${datasource}",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "GPU Usage",
+                    "url": "/d/Oxed_c6Wzdf/nvidia-dcgm-exporter-test?orgId=1&from=${__data.fields.start_timestamp_ms}&to=${__data.fields.end_timestamp_ms}"
+                  },
+                  {
+                    "title": "RDMA Usage",
+                    "url": "/d/rdma-exporter-revised-1/rdma-monitoring?orgId=1&from=${__data.fields.start_timestamp_ms}&to=${__data.fields.end_timestamp_ms}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "id": 4,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "id"
+          }
+        ]
+      },
+      "pluginVersion": "12.0.2",
+      "targets": [
+        {
+          "datasource": "${datasource}",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \n    id AS id, \n    metadata_name AS metadata_name, \n    metadata_node_size AS metadata_node_size, \n    metadata_gpu_per_node AS metadata_gpu_per_node, \n    metadata_gpu_info AS metadata_gpu_info, \n    `Time taken for tests (s)` AS time_taken_for_tests, \n    `Number of concurrency` AS number_of_concurrency, \n    `Total requests` AS total_requests, \n    `Succeed requests` AS succeed_requests, \n    `Failed requests` AS failed_requests, \n    `Output token throughput (tok/s)` AS output_token_throughput, \n    `Total token throughput (tok/s)` AS total_token_throughput, \n    `Request throughput (req/s)` AS request_throughput, \n    `Average latency (s)` AS average_latency, \n    `Average time to first token (s)` AS avg_ttft, \n    `Average time per output token (s)` AS avg_tpot, \n    `Average input tokens per request` AS average_input_tokens_per_request, \n    `Average output tokens per request` AS average_output_tokens_per_request, \n    `Average package latency (s)` AS average_package_latency, \n    `Average package per request` AS average_package_per_request, \n    CAST(concurrency AS UNSIGNED) AS concurrency, \n    start_timestamp AS start_timestamp, \n    end_timestamp AS end_timestamp,\n    start_timestamp * 1000 AS start_timestamp_ms, \n    end_timestamp * 1000 AS end_timestamp_ms,\n    test_ISL AS test_isl, \n    test_OSL AS test_osl, \n    test_EOS AS test_eos, \n    num_requests AS num_requests,\n    deploy_model_name AS deploy_model_name, \n    deploy_engine_name AS deploy_engine_name, \n    deploy_engine_version AS deploy_engine_version, \n    deploy_engine_image AS deploy_engine_image, \n    deploy_replicas AS deploy_replicas, \n    deploy_group_size AS deploy_group_size, \n    deploy_pd_enable AS deploy_pd_enable, \n    deploy_pd_prefill_replicas AS deploy_pd_prefill_replicas, \n    deploy_pd_prefill_tp AS deploy_pd_prefill_tp, \n    deploy_pd_prefill_pp AS deploy_pd_prefill_pp, \n    deploy_pd_prefill_ep_enable AS deploy_pd_prefill_ep_enable, \n    deploy_pd_prefill_args AS deploy_pd_prefill_args, \n    deploy_pd_prefill_env AS deploy_pd_prefill_env, \n    deploy_pd_decode_replicas AS deploy_pd_decode_replicas, \n    deploy_pd_decode_tp AS deploy_pd_decode_tp, \n    deploy_pd_decode_pp AS deploy_pd_decode_pp, \n    deploy_pd_decode_ep_enable AS deploy_pd_decode_ep_enable, \n    deploy_pd_decode_args AS deploy_pd_decode_args, \n    deploy_pd_decode_env AS deploy_pd_decode_env, \n    deploy_model_PVC_enable AS deploy_model_pvc_enable, \n    deploy_model_PVC_name AS deploy_model_pvc_name, \n    deploy_model_local_enable AS deploy_model_local_enable, \n    deploy_model_path AS deploy_model_path, \n    deploy_tp AS deploy_tp, \n    deploy_pp AS deploy_pp, \n    deploy_ep_enable AS deploy_ep_enable, \n    deploy_args AS deploy_args, \n    deploy_env AS deploy_env, \n    test_tokenizer AS test_tokenizer, \n    test_dataset AS test_dataset, \n    test_dataset_path AS test_dataset_path, \n    helm_name AS helm_name, \n    helm_version AS helm_version, \n    helm_values AS helm_values,\n    p10_TTFT_seconds, p25_TTFT_seconds, p50_TTFT_seconds, p66_TTFT_seconds, p75_TTFT_seconds, p80_TTFT_seconds, p90_TTFT_seconds, p95_TTFT_seconds, p98_TTFT_seconds, p99_TTFT_seconds, \n    p10_ITL_seconds, p25_ITL_seconds, p50_ITL_seconds, p66_ITL_seconds, p75_ITL_seconds, p80_ITL_seconds, p90_ITL_seconds, p95_ITL_seconds, p98_ITL_seconds, p99_ITL_seconds, \n    p10_TPOT_seconds, p25_TPOT_seconds, p50_TPOT_seconds, p66_TPOT_seconds, p75_TPOT_seconds, p80_TPOT_seconds, p90_TPOT_seconds, p95_TPOT_seconds, p98_TPOT_seconds, p99_TPOT_seconds, \n    p10_Latency_seconds, p25_Latency_seconds, p50_Latency_seconds, p66_Latency_seconds, p75_Latency_seconds, p80_Latency_seconds, p90_Latency_seconds, p95_Latency_seconds, p98_Latency_seconds, p99_Latency_seconds, \n    p10_Input_tokens, p25_Input_tokens, p50_Input_tokens, p66_Input_tokens, p75_Input_tokens, p80_Input_tokens, p90_Input_tokens, p95_Input_tokens, p98_Input_tokens, p99_Input_tokens, \n    p10_Output_tokens, p25_Output_tokens, p50_Output_tokens, p66_Output_tokens, p75_Output_tokens, p80_Output_tokens, p90_Output_tokens, p95_Output_tokens, p98_Output_tokens, p99_Output_tokens, \n    p10_Output_tok_per_s, p25_Output_tok_per_s, p50_Output_tok_per_s, p66_Output_tok_per_s, p75_Output_tok_per_s, p80_Output_tok_per_s, p90_Output_tok_per_s, p95_Output_tok_per_s, p98_Output_tok_per_s, p99_Output_tok_per_s, \n    p10_Total_tok_per_s, p25_Total_tok_per_s, p50_Total_tok_per_s, p66_Total_tok_per_s, p75_Total_tok_per_s, p80_Total_tok_per_s, p90_Total_tok_per_s, p95_Total_tok_per_s, p98_Total_tok_per_s, p99_Total_tok_per_s\n\nFROM ${table_name} \nWHERE \n    `metadata_name` IN (${metadata_name:sqlstring}) AND\n    `metadata_node_size` IN (${metadata_node_size:sqlstring}) AND \n    `metadata_gpu_per_node` IN (${metadata_gpu_per_node:sqlstring}) AND \n    `metadata_gpu_info` IN (${metadata_gpu_info:sqlstring}) AND \n    `deploy_model_name` IN (${deploy_model_name:sqlstring})   AND  \n    `deploy_engine_name` IN (${deploy_engine_name:sqlstring})  AND \n    `deploy_replicas` IN (${deploy_replicas:sqlstring}) AND \n    `deploy_group_size` IN (${deploy_group_size:sqlstring}) AND \n    `deploy_pd_enable` IN (${deploy_pd_enable:sqlstring}) AND \n    `deploy_pd_prefill_replicas` IN (${deploy_pd_prefill_replicas:sqlstring}) AND \n    `deploy_pd_prefill_tp` IN (${deploy_pd_prefill_tp:sqlstring}) AND \n    `deploy_pd_prefill_pp` IN (${deploy_pd_prefill_pp:sqlstring}) AND \n    `deploy_pd_prefill_ep_enable` IN (${deploy_pd_prefill_ep_enable:sqlstring})  AND  \n    `deploy_pd_decode_replicas` IN (${deploy_pd_decode_replicas:sqlstring}) AND \n    `deploy_pd_decode_tp` IN (${deploy_pd_decode_tp:sqlstring}) AND \n    `deploy_pd_decode_pp` IN (${deploy_pd_decode_pp:sqlstring}) AND \n    `deploy_pd_decode_ep_enable` IN (${deploy_pd_decode_ep_enable:sqlstring}) AND   \n    `deploy_tp` IN (${deploy_tp:sqlstring}) AND \n    `deploy_pp` IN (${deploy_pp:sqlstring}) AND \n    `deploy_ep_enable` IN (${deploy_ep_enable:sqlstring}) AND   \n    `test_ISL` IN (${test_ISL:sqlstring}) AND \n    `test_OSL` IN (${test_OSL:sqlstring}) AND \n    `test_dataset` IN (${test_dataset:sqlstring})  AND \n    `test_EOS` IN (${test_EOS:sqlstring}) AND \n    `concurrency` IN (${concurrency:sqlstring}) \nORDER BY `id` ASC\n",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Raw Test Data",
+      "type": "table"
+    }
+  ],
+  "preload": false,
+  "refresh": "auto",
+  "schemaVersion": 41,
+  "tags": [
+    "pressure-test",
+    "llm-monitor"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "mysql",
+          "value": "aespaf7w035s0d"
+        },
+        "name": "datasource",
+        "options": [],
+        "query": "mysql",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "test_table",
+          "value": "test_table"
+        },
+        "name": "table_name",
+        "options": [
+          {
+            "selected": true,
+            "text": "test_table",
+            "value": "test_table"
+          }
+        ],
+        "query": "test_table",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `metadata_name` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "metadata_name",
+        "options": [],
+        "query": "SELECT DISTINCT `metadata_name` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "4"
+          ],
+          "value": [
+            "4"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `metadata_node_size` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "metadata_node_size",
+        "options": [],
+        "query": "SELECT DISTINCT `metadata_node_size` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "8"
+          ],
+          "value": [
+            "8"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `metadata_gpu_per_node` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "metadata_gpu_per_node",
+        "options": [],
+        "query": "SELECT DISTINCT `metadata_gpu_per_node` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "H20-96G"
+          ],
+          "value": [
+            "H20-96G"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `metadata_gpu_info` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "metadata_gpu_info",
+        "options": [],
+        "query": "SELECT DISTINCT `metadata_gpu_info` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "deepseek-ai/DeepSeek-V3-0324"
+          ],
+          "value": [
+            "deepseek-ai/DeepSeek-V3-0324"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_model_name` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_model_name",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_model_name` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "sglang"
+          ],
+          "value": [
+            "sglang"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_engine_name` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_engine_name",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_engine_name` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "1"
+          ],
+          "value": [
+            "1"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_replicas` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_replicas",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_replicas` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "1"
+          ],
+          "value": [
+            "1"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_group_size` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_group_size",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_group_size` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "0"
+          ],
+          "value": [
+            "0"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pd_enable` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pd_enable",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pd_enable` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "1"
+          ],
+          "value": [
+            "1"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pd_prefill_replicas` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pd_prefill_replicas",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pd_prefill_replicas` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "8"
+          ],
+          "value": [
+            "8"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pd_prefill_tp` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pd_prefill_tp",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pd_prefill_tp` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "8"
+          ],
+          "value": [
+            "8"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pd_prefill_pp` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pd_prefill_pp",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pd_prefill_pp` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "1"
+          ],
+          "value": [
+            "1"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pd_prefill_ep_enable` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pd_prefill_ep_enable",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pd_prefill_ep_enable` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pd_decode_replicas` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pd_decode_replicas",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pd_decode_replicas` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "8"
+          ],
+          "value": [
+            "8"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pd_decode_tp` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pd_decode_tp",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pd_decode_tp` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "8"
+          ],
+          "value": [
+            "8"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pd_decode_pp` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pd_decode_pp",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pd_decode_pp` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "1"
+          ],
+          "value": [
+            "1"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pd_decode_ep_enable` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pd_decode_ep_enable",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pd_decode_ep_enable` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "8"
+          ],
+          "value": [
+            "8"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_tp` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_tp",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_tp` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "1"
+          ],
+          "value": [
+            "1"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_pp` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_pp",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_pp` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "1"
+          ],
+          "value": [
+            "1"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `deploy_ep_enable` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "deploy_ep_enable",
+        "options": [],
+        "query": "SELECT DISTINCT `deploy_ep_enable` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "1000"
+          ],
+          "value": [
+            "1000"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `test_ISL` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "test_ISL",
+        "options": [],
+        "query": "SELECT DISTINCT `test_ISL` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `test_OSL` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "test_OSL",
+        "options": [],
+        "query": "SELECT DISTINCT `test_OSL` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "random"
+          ],
+          "value": [
+            "random"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `test_dataset` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "test_dataset",
+        "options": [],
+        "query": "SELECT DISTINCT `test_dataset` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `test_EOS` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "test_EOS",
+        "options": [],
+        "query": "SELECT DISTINCT `test_EOS` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "${datasource}"
+        },
+        "definition": "SELECT DISTINCT `concurrency` FROM ${table_name}",
+        "includeAll": true,
+        "multi": true,
+        "name": "concurrency",
+        "options": [],
+        "query": "SELECT DISTINCT `concurrency` FROM ${table_name}",
+        "refresh": 2,
+        "sort": 7,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Pressure Test Analysis",
+  "uid": "pressure-test-dashboard-v9",
+  "version": 11
+}

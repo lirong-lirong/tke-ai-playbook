@@ -1469,7 +1469,10 @@
   "preload": false,
   "refresh": false,
   "schemaVersion": 41,
-  "tags": [],
+  "tags": [
+    "GPU",
+    "DCGM"
+  ],
   "templating": {
     "list": [
       {
@@ -1502,25 +1505,9 @@
       },
       {
         "current": {
-          "text": [
-            "0",
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
-            "7"
-          ],
+          "text": "All",
           "value": [
-            "0",
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
-            "7"
+            "$__all"
           ]
         },
         "datasource": {
@@ -1544,12 +1531,12 @@
     ]
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
-  "title": "NVIDIA DCGM Exporter test",
+  "title": "NVIDIA DCGM Exporter",
   "uid": "Oxed_c6Wzdf",
-  "version": 11
+  "version": 13
 }

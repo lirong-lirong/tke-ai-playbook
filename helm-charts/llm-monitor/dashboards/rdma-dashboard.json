@@ -1,19 +1,4 @@
 {
-  "__inputs": [],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "10.2.2"
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    }
-  ],
   "annotations": {
     "list": [
       {
@@ -33,8 +18,8 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
+  "id": 13,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
@@ -51,20 +36,20 @@
       "type": "row"
     },
     {
-      "title": "RDMA Transmit Bandwidth",
-      "type": "timeseries",
-      "description": "Transmit bandwidth for selected devices on node $node.",
+      "description": "Transmit and Receive bandwidth for selected devices on node $node.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "opacity",
@@ -73,6 +58,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineWidth": 2,
             "pointSize": 5,
@@ -94,14 +80,44 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
           "unit": "bps"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Rx"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tx"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -118,14 +134,17 @@
           ],
           "displayMode": "table",
           "placement": "right",
-          "showLegend": true
+          "showLegend": true,
+          "sortBy": "Name",
+          "sortDesc": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
-      "repeat": null,
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
@@ -133,114 +152,37 @@
             "uid": "$datasource"
           },
           "expr": "sum(rdma_port_transmit_bandwidth_bytes_per_second{node=~\"$node\", device=~\"$device\"}) by (device)",
-          "legendFormat": "{{device}}",
+          "legendFormat": "{{device}} - Tx",
           "refId": "A"
-        }
-      ]
-    },
-    {
-      "title": "RDMA Receive Bandwidth",
-      "type": "timeseries",
-      "description": "Receive bandwidth for selected devices on node $node.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "bps"
         },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 1
-      },
-      "id": 11,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "repeat": null,
-      "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "$datasource"
           },
           "expr": "sum(rdma_port_receive_bandwidth_bytes_per_second{node=~\"$node\", device=~\"$device\"}) by (device)",
-          "legendFormat": "{{device}}",
-          "refId": "A"
+          "legendFormat": "{{device}} - Rx",
+          "refId": "B"
         }
-      ]
+      ],
+      "title": "RDMA Bandwidth",
+      "type": "timeseries"
     },
     {
-      "title": "RDMA Transmit Packet Rate",
-      "type": "timeseries",
-      "description": "Transmit packet rate for selected devices on node $node.",
+      "description": "Transmit and Receive packet rate for selected devices on node $node.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "opacity",
@@ -249,6 +191,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineWidth": 2,
             "pointSize": 5,
@@ -270,8 +213,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           },
@@ -297,10 +239,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
@@ -308,102 +252,23 @@
             "uid": "$datasource"
           },
           "expr": "sum(rate(rdma_port_xmit_packets{node=~\"$node\", device=~\"$device\"}[$__rate_interval])) by (device)",
-          "legendFormat": "{{device}}",
+          "legendFormat": "{{device}} - Tx",
           "refId": "A"
-        }
-      ]
-    },
-    {
-      "title": "RDMA Receive Packet Rate",
-      "type": "timeseries",
-      "description": "Receive packet rate for selected devices on node $node.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "opacity",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "pps"
         },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 9
-      },
-      "id": 12,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "repeat": null,
-      "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "$datasource"
           },
           "expr": "sum(rate(rdma_port_rcv_packets{node=~\"$node\", device=~\"$device\"}[$__rate_interval])) by (device)",
-          "legendFormat": "{{device}}",
-          "refId": "A"
+          "legendFormat": "{{device}} - Rx",
+          "refId": "B"
         }
-      ]
+      ],
+      "title": "RDMA Packet Rate",
+      "type": "timeseries"
     },
     {
-      "title": "Transmit Errors & Discards",
-      "type": "timeseries",
       "description": "Rate of transmit errors and discards for selected devices on node $node.",
       "fieldConfig": {
         "defaults": {
@@ -411,11 +276,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "opacity",
@@ -424,6 +291,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineWidth": 2,
             "pointSize": 5,
@@ -445,8 +313,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -462,7 +329,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 17
+        "y": 9
       },
       "id": 3,
       "options": {
@@ -473,13 +340,17 @@
           ],
           "displayMode": "table",
           "placement": "right",
-          "showLegend": true
+          "showLegend": true,
+          "sortBy": "Name",
+          "sortDesc": false
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
@@ -490,11 +361,11 @@
           "legendFormat": "{{device}} - {{__name__}}",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Transmit Errors & Discards",
+      "type": "timeseries"
     },
     {
-      "title": "Receive Errors",
-      "type": "timeseries",
       "description": "Rate of receive errors for selected devices on node $node.",
       "fieldConfig": {
         "defaults": {
@@ -502,11 +373,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "opacity",
@@ -515,6 +388,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "smooth",
             "lineWidth": 2,
             "pointSize": 5,
@@ -536,8 +410,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -552,8 +425,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "y": 17,
-        "x": 12
+        "x": 12,
+        "y": 9
       },
       "id": 4,
       "options": {
@@ -567,10 +440,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
@@ -581,12 +456,14 @@
           "legendFormat": "{{device}} - {{__name__}}",
           "refId": "A"
         }
-      ]
+      ],
+      "title": "Receive Errors",
+      "type": "timeseries"
     }
   ],
+  "preload": false,
   "refresh": "10s",
-  "schemaVersion": 38,
-  "style": "dark",
+  "schemaVersion": 41,
   "tags": [
     "rdma",
     "infiniband",
@@ -595,12 +472,17 @@
   "templating": {
     "list": [
       {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
         "datasource": {
           "type": "prometheus",
-          "uid": "prometheus"
+          "uid": "${datasource}"
         },
         "definition": "label_values(rdma_port_receive_bandwidth_bytes_per_second, node)",
-        "hide": 0,
         "includeAll": true,
         "multi": true,
         "name": "node",
@@ -609,19 +491,21 @@
           "query": "label_values(rdma_port_receive_bandwidth_bytes_per_second, node)",
           "refId": "StandardVariableQuery"
         },
-        "refresh": 1,
+        "refresh": 2,
         "regex": "",
-        "skipUrlSync": false,
         "sort": 1,
         "type": "query"
       },
       {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
         "datasource": {
           "type": "prometheus",
-          "uid": "prometheus"
+          "uid": "${datasource}"
         },
         "definition": "label_values(rdma_port_receive_bandwidth_bytes_per_second{node=~\"$node\"}, device)",
-        "hide": 0,
         "includeAll": true,
         "multi": true,
         "name": "device",
@@ -632,29 +516,31 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
         "sort": 1,
         "type": "query"
       },
       {
-        "current": {},
+        "current": {
+          "text": "GPU-prometheus",
+          "value": "fespn6t8fz7k0a"
+        },
         "hide": 2,
         "name": "datasource",
         "options": [],
         "query": "prometheus",
-        "skipUrlSync": false,
+        "refresh": 1,
+        "regex": "GPU-prometheus",
         "type": "datasource"
       }
     ]
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "RDMA Monitoring Dashboard",
-  "uid": "rdma-exporter-revised",
-  "version": 2,
-  "weekStart": ""
+  "title": "RDMA Monitoring",
+  "uid": "rdma-exporter-revised-1",
+  "version": 4
 }
