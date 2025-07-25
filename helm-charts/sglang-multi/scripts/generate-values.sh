@@ -73,7 +73,7 @@ server:
     tpSize: $TP_SIZE
     ppSize: $PP_SIZE
     epEnabled: $EP_ENABLED
-    memFractionStatic: 0.85
+    memFractionStatic: 0.80
     trustRemoteCode: true
   extraArgs:
 $(echo "$EXTRA_ARGS_YAML" | sed 's/^/    /')

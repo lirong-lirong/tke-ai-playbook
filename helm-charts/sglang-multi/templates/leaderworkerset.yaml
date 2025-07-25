@@ -55,7 +55,6 @@ spec:
                 nvidia.com/gpu: {{ .Values.server.resources.gpu }}
             ports:
               - containerPort: 60000
-              - containerPort: 20000
             startupProbe:
               httpGet:
                 path: /health
@@ -114,6 +113,7 @@ spec:
       metadata:
         labels:
           {{- include "helm.selectorLabels" . | nindent 10 }}
+          role: worker
       spec:
         dnsPolicy: ClusterFirstWithHostNet
         hostNetwork: true
@@ -144,7 +144,7 @@ spec:
                   --trust-remote-code \
                   --host 0.0.0.0 \
                   --port 60000 \
-                  --mem-fraction-static 0.8 \
+                  --mem-fraction-static {{ .Values.server.args.memFractionStatic}} \
                   {{- range .Values.server.args.extraArgs }}
                   {{ . }} \
                   {{- end }}

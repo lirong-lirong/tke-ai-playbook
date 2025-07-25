@@ -7,15 +7,21 @@ restartPolicy: Always
 
 # 镜像配置
 image:
-  repository: ccr.ccs.tencentyun.com/tke-ai-playbook/sglang
-  tag: nightly
+  repository: fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang
+  tag: v0.4.8-cu126
   pullPolicy: IfNotPresent
 
 # 模型配置
 model:
-  pvcName: "default-model-pvc"
-  mountPath: "/work/models"
-  modelPath: ""
+  name: "deepseek-ai/DeepSeek-V3-0324"
+  pvc:
+    enabled: false
+    pvcName: "default-model-pvc"
+    path: ""
+  local:
+    enabled: true
+    path: "/data0/deepseek-ai/DeepSeek-V3-0324"
+
 
 # 节点
 nodeSize: 2
@@ -53,7 +59,7 @@ llmConfig:
 
 commandStr: |
   python3 -m sglang.launch_server \
-    --model-path {{ .Values.model.mountPath }}/{{ .Values.model.modelPath}} \
+    --model-path /{{ .Values.model.name }} \
     --mem-fraction-static "{{ .Values.llmConfig.memFractionStatic }}" \
     --tp "{{ .Values.llmConfig.tp }}" \
     --dist-init-addr $(LWS_LEADER_ADDRESS):{{ .Values.llmConfig.distInitPort }} \
@@ -129,20 +135,34 @@ volumes: |
     emptyDir:
       medium: Memory
       sizeLimit: {{ .Values.resourcesPerNode.sharedMemory }}
-  - name: model
-    persistentVolumeClaim:
-      claimName: {{ .Values.model.pvcName }}
   - name: ib
     hostPath:
       path: /dev/infiniband
+  {{- if .Values.model.pvc.enabled }}
+  - name: model
+    persistentVolumeClaim:
+      claimName: {{ .Values.model.pvcName }}
+  {{- else if .Values.model.local.enabled }}
+  - name: model
+    hostPath:
+      path: {{ .Values.model.local.path }}
+  {{- end }}
+
 
 volumeMounts: | 
   - name: dshm
     mountPath: /dev/shm  
-  - name: model
-    mountPath: {{ .Values.model.mountPath }}
   - name: ib
     mountPath: /dev/infiniband
+  {{- if .Values.model.pvc.enabled }}
+  - name: model
+    mountPath: /{{ .Values.model.name }}
+    subPath: {{ .Values.model.pvc.path }}
+  {{- else if .Values.model.local.enabled }}
+  - name: model
+    mountPath: /{{ .Values.model.name }}
+  {{- end }}
+
 
 ResourcesStr: |
   limits:

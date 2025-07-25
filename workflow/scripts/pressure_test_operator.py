@@ -84,9 +84,10 @@ def main():
     OSL = test_cfg.get('OSL', 500)
     EOS = test_cfg.get('EOS', True)
     config_data['helm']['values'] = values_yaml
-
+    
     successful_runs = 0
     for concurrency, num_requests in zip(concurrency_list, requests_per_list):
+        logging.info(f"--- test config ---\n {config_data} \n ----------" )
         logging.info(f"--- Running test for concurrency: {concurrency} with {num_requests} requests ---")
         task_cfg = Arguments(
             model=model, url=url + '/v1/chat/completions', api='openai',
