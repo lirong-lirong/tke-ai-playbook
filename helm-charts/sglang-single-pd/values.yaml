@@ -1,4 +1,4 @@
-# Default values for sglang-multi-pd.
+# Default values for sglang-single-pd.
 
 # Model Configuration
 model:
@@ -25,7 +25,7 @@ loadBalancer:
   replicas: 1
   image: "fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang-nixl-mooncake:v0.4.8-cu126"
   imagePullPolicy: IfNotPresent
-  port: 8000
+  port: 60000
   resources:
     requests:
       cpu: "5000m"
@@ -35,7 +35,7 @@ loadBalancer:
       memory: "64Gi"
   service:
     type: LoadBalancer
-    port: 8000
+    port: 60000
     loadBalancerIP: ""
 
 # Prefill Configuration

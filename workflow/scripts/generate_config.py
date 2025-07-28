@@ -2,6 +2,7 @@ import json
 import os
 import yaml
 import itertools
+import math
 
 CONFIG_MAP_MOUNT_PATH = '/etc/test-parameters'
 OUTPUT_FILE_PATH = '/tmp/output'
@@ -48,12 +49,22 @@ def build_final_config(scenario_combo, common_config):
     workflow_id = f"{model_short_name}-{engine_name}-{scenario_name}".replace('.', '-')
 
     # --- Determine group_size and helm.name ---
-    if is_pd_enabled:
-        group_size = node_size
-    else:
-        tp = combo.get('tp', 1)
-        pp = combo.get('pp', 1)
-        group_size = -(-tp * pp // gpu_per_node) if gpu_per_node > 0 else 1
+    group_size = 1
+    if gpu_per_node > 0:
+        if is_pd_enabled:
+            pd_config = combo.get('pd', {})
+            prefill_conf = pd_config.get('prefill', {})
+            decode_conf = pd_config.get('decode', {})
+            # Provide defaults for calculation to avoid TypeErrors
+            prefill_tp = prefill_conf.get('tp', 1)
+            prefill_pp = prefill_conf.get('pp', 1)
+            decode_tp = decode_conf.get('tp', 1)
+            decode_pp = decode_conf.get('pp', 1)
+            group_size = math.ceil(max(prefill_tp * prefill_pp, decode_tp * decode_pp) / gpu_per_node)
+        else:
+            tp = combo.get('tp', 1)
+            pp = combo.get('pp', 1)
+            group_size = math.ceil(tp * pp / gpu_per_node)
     
     mode = "single" if group_size == 1 else "multi"
     helm_name = f"{engine_name}-{mode}"
@@ -99,9 +110,30 @@ def build_final_config(scenario_combo, common_config):
     }
 
     if is_pd_enabled:
+        pd_config = combo.get('pd', {})
+        prefill_conf = pd_config.get('prefill', {})
+        decode_conf = pd_config.get('decode', {})
+        # A global ep_enable can be set at the 'pd' level
+        pd_ep_enable = pd_config.get('ep_enable', False)
+
         config["deploy"]["pd"].update({
-            "prefill": {"replicas": combo.get('pd_prefill_replicas', 1), "tp": combo.get('pd_prefill_tp', 1), "pp": combo.get('pd_prefill_pp', 1), "ep_enable": combo.get('ep_enable', False), "args": [], "env": []},
-            "decode": {"replicas": combo.get('pd_decode_replicas', 1), "tp": combo.get('pd_decode_tp', 1), "pp": combo.get('pd_decode_pp', 1), "ep_enable": combo.get('ep_enable', False), "args": [], "env": []}
+            "prefill": {
+                "replicas": prefill_conf.get('replicas', 1), 
+                "tp": prefill_conf.get('tp', 1), 
+                "pp": prefill_conf.get('pp', 1), 
+                "ep_enable": prefill_conf.get('ep_enable', pd_ep_enable), # prefill specific overrides global
+                "args": prefill_conf.get('args', []), 
+                "env": prefill_conf.get('env', [])
+            },
+            
+            "decode": {
+                "replicas": decode_conf.get('replicas', 1),
+                "tp": decode_conf.get('tp', 1),
+                "pp": decode_conf.get('pp', 1),
+                "ep_enable": decode_conf.get('ep_enable', pd_ep_enable), # decode specific overrides global
+                "args": decode_conf.get('args', []),
+                "env": decode_conf.get('env', [])
+            }
         })
         config["deploy"].update({"replicas": 0, "tp": 0, "pp": 0})
     else:

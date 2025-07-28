@@ -1,6 +1,4 @@
 #!/bin/sh
-set -eu
-
 # This script is executed by the cleanup-operator workflow template.
 # It reads parameters as environment variables.
 
@@ -20,8 +18,8 @@ if [ "$CLEANUP_STRATEGY" = "aggressive" ]; then
   echo "Force deleting all related resources..."
   
   # 删除所有相关资源
-            kubectl delete all -l app.kubernetes.io/instance=$RELEASE_NAME -n $NAMESPACE --force --grace-period=0 --timeout=60s || true
-            kubectl delete all -l app.kubernetes.io/instance=${RELEASE_NAME}-test -n $NAMESPACE --force --grace-period=0 --timeout=60s || true
+  kubectl delete all -l app.kubernetes.io/instance=$RELEASE_NAME -n $NAMESPACE --force --grace-period=0 --timeout=60s || true
+  kubectl delete all -l app.kubernetes.io/instance=${RELEASE_NAME}-test -n $NAMESPACE --force --grace-period=0 --timeout=60s || true
   
   kubectl delete crd -l app.kubernetes.io/instance="$RELEASE_NAME" -n "$NAMESPACE" || echo "kubectl delete crd for $RELEASE_NAME failed, continuing..."
   

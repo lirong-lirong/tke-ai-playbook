@@ -153,6 +153,32 @@ spec:
                 nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
               requests:
                 nvidia.com/gpu: "{{ .Values.server.resources.gpu }}"
+            ports:
+              - containerPort: 60000
+            startupProbe:
+              httpGet:
+                path: /health
+                port: 60000
+                scheme: HTTP
+              timeoutSeconds: 3
+              periodSeconds: 10
+              failureThreshold: 360
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: 60000
+                scheme: HTTP
+              timeoutSeconds: 3
+              periodSeconds: 10
+              failureThreshold: 3
+            readinessProbe:
+              httpGet:
+                path: /health
+                port: 60000
+                scheme: HTTP
+              timeoutSeconds: 3
+              periodSeconds: 10
+              failureThreshold: 3
             volumeMounts:
             - name: dshm
               mountPath: /dev/shm

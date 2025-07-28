@@ -32,7 +32,7 @@ def main():
         with open(STATUS_CODE_FILE, "w") as f: f.write("false")
         sys.exit(1)
 
-    url = os.environ.get('LLM_SERVICE', f'http://{release_name}:60000')
+    url = os.environ.get('LLM_SERVICE', f'http://{release_name}-service:60000')
     
     with open(STATUS_CODE_FILE, "w") as f: f.write("false")
     if pre_status.lower() == 'false':
