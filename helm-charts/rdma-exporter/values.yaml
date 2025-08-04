@@ -40,13 +40,13 @@ service:
 # -- ServiceMonitor configuration for Prometheus Operator
 serviceMonitor:
   # -- If true, a ServiceMonitor CRD is created for a Prometheus Operator
-  enabled: false
+  enabled: true
   # -- Namespace where Prometheus Operator is running
   namespace: ""
   # -- Scrape interval for the ServiceMonitor
-  interval: 15s
+  interval: 5s
   # -- Scrape timeout for the ServiceMonitor
-  scrapeTimeout: 10s
+  scrapeTimeout: 5s
   # -- Additional labels for the ServiceMonitor
   labels: {}
 
@@ -54,9 +54,9 @@ serviceMonitor:
 # By default, it will be scheduled on all nodes.
 # You should specify a selector to target nodes with RDMA hardware.
 # For example:
-# nodeSelector:
-#   nvidia.com/gpu: "true"
-nodeSelector: {}
+nodeSelector:
+  nvidia-device-enable: "enable"
+# nodeSelector: {}
 
 # -- Tolerations for scheduling the exporter pods.
 tolerations: []
@@ -86,4 +86,4 @@ env:
   # Log level (e.g., INFO, DEBUG, WARNING, ERROR)
   LOG_LEVEL: "INFO"
   # The interval in seconds at which the exporter scrapes the hw_counters
-  POLL_INTERVAL: "15"
+  POLL_INTERVAL: "5"

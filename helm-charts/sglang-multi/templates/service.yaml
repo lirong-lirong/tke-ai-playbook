@@ -8,12 +8,11 @@ metadata:
     {{- include "helm.labels" . | nindent 4 }}
 spec:
   ports:
-  - name: http
-    port: {{ .Values.service.port }}
-    protocol: TCP
-    targetPort: 60000
+    - port: {{ .Values.service.port }}
+      protocol: TCP
+      targetPort: 60000
   selector:
-    {{- include "helm.selectorLabels" . | nindent 4 }}
+    leaderworkerset.sigs.k8s.io/name: {{ include "helm.fullname" . }}
     role: leader
   type: {{ .Values.service.type }}
 {{- end }}

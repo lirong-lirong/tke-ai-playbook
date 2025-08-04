@@ -7,14 +7,14 @@ leaderWorkerSet:
 
 # Model Configuration
 model:
-  name: "Qwen/Qwen3-32B"
+  name: "ZhipuAI/GLM-4.5"
   pvc:
     enabled: false
-    name: "default-model-pvc"
-    path: ""
+    name: "ai-model"
+    path: "ZhipuAI/GLM-4.5"
   local:
     enabled: true
-    path: "/data0/Qwen/Qwen3-32B"
+    path: "/data0/ZhipuAI/GLM-4.5"
   
 # Multi-Node Deployment Configuration
 multiNode:
@@ -24,18 +24,23 @@ multiNode:
 server:
   replicas: 1
   restartPolicy: None # RecreateGroupOnPodRestart
-  # image: "ccr.ccs.tencentyun.com/tke-ai-playbook/sglang:nightly"
-  image: "fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang:v0.4.8-cu126"
-  imagePullPolicy: IfNotPresent
+  image: "fanjiankong-bj.tencentcloudcr.com/pengdrumli/sglang:0.4.9.latest.v3"
+  imagePullPolicy: Always
   resources:
     gpu: 8
   args:
-    tpSize: 16
-    ppSize: 1
+    tpSize: 8
+    ppSize: 2
     epEnabled: false
     memFractionStatic: 0.80
     trustRemoteCode: true
   extraArgs:
+    - "--tool-call-parser glm45"
+    - "--reasoning-parser glm45"
+    - "--speculative-algorithm EAGLE"
+    - "--speculative-num-steps 3"
+    - "--speculative-eagle-topk 1"
+    - "--speculative-num-draft-tokens 4"
 
   # Environment variables
   env:

@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 13,
+  "id": 35,
   "links": [],
   "panels": [
     {
@@ -36,6 +36,9 @@
       "type": "row"
     },
     {
+      "datasource": {
+        "type": "prometheus"
+      },
       "description": "Transmit and Receive bandwidth for selected devices on node $node.",
       "fieldConfig": {
         "defaults": {
@@ -84,7 +87,7 @@
               }
             ]
           },
-          "unit": "bps"
+          "unit": "Bps"
         },
         "overrides": [
           {
@@ -135,8 +138,8 @@
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
-          "sortBy": "Name",
-          "sortDesc": false
+          "sortBy": "Max",
+          "sortDesc": true
         },
         "tooltip": {
           "hideZeros": false,
@@ -462,7 +465,7 @@
     }
   ],
   "preload": false,
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 41,
   "tags": [
     "rdma",
@@ -473,14 +476,22 @@
     "list": [
       {
         "current": {
-          "text": "All",
+          "text": [
+            "10.32.5.183",
+            "10.32.5.203",
+            "10.32.5.94",
+            "10.32.5.71"
+          ],
           "value": [
-            "$__all"
+            "10.32.5.183",
+            "10.32.5.203",
+            "10.32.5.94",
+            "10.32.5.71"
           ]
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "${datasource}"
+          "uid": "prometheus"
         },
         "definition": "label_values(rdma_port_receive_bandwidth_bytes_per_second, node)",
         "includeAll": true,
@@ -498,12 +509,22 @@
       },
       {
         "current": {
-          "text": "All",
-          "value": "$__all"
+          "text": [
+            "mlx5_bond_0",
+            "mlx5_bond_1",
+            "mlx5_bond_2",
+            "mlx5_bond_3"
+          ],
+          "value": [
+            "mlx5_bond_0",
+            "mlx5_bond_1",
+            "mlx5_bond_2",
+            "mlx5_bond_3"
+          ]
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "${datasource}"
+          "uid": "prometheus"
         },
         "definition": "label_values(rdma_port_receive_bandwidth_bytes_per_second{node=~\"$node\"}, device)",
         "includeAll": true,
@@ -521,26 +542,26 @@
       },
       {
         "current": {
-          "text": "GPU-prometheus",
-          "value": "fespn6t8fz7k0a"
+          "text": "Prometheus",
+          "value": "prometheus"
         },
         "hide": 2,
         "name": "datasource",
         "options": [],
         "query": "prometheus",
         "refresh": 1,
-        "regex": "GPU-prometheus",
+        "regex": "",
         "type": "datasource"
       }
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "RDMA Monitoring",
   "uid": "rdma-exporter-revised-1",
-  "version": 4
+  "version": 7
 }
