@@ -26,13 +26,13 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 9,
+  "id": 33,
   "links": [],
   "panels": [
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -135,7 +135,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -239,7 +239,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -343,7 +343,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -446,7 +446,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -548,7 +548,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -651,7 +651,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -754,7 +754,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -858,7 +858,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -955,7 +955,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -1053,7 +1053,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -1156,7 +1156,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "description": "",
       "fieldConfig": {
@@ -1259,7 +1259,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -1363,7 +1363,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "fespn6t8fz7k0a"
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -1478,17 +1478,15 @@
       {
         "current": {
           "text": [
-            "10.32.11.118:9400",
-            "10.32.11.231:9400"
+            "10.32.5.71:9400"
           ],
           "value": [
-            "10.32.11.118:9400",
-            "10.32.11.231:9400"
+            "10.32.5.71:9400"
           ]
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "fespn6t8fz7k0a"
+          "uid": "prometheus"
         },
         "definition": "label_values(DCGM_FI_DEV_GPU_TEMP, instance)",
         "includeAll": false,
@@ -1512,7 +1510,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "fespn6t8fz7k0a"
+          "uid": "prometheus"
         },
         "definition": "label_values(gpu)",
         "includeAll": true,
@@ -1538,5 +1536,5 @@
   "timezone": "",
   "title": "NVIDIA DCGM Exporter",
   "uid": "Oxed_c6Wzdf",
-  "version": 13
+  "version": 7
 }

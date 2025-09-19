@@ -16,6 +16,7 @@ NODE_NAME = os.environ.get("NODE_NAME", "unknown")
 logging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- State for Bandwidth Calculation ---
+# Stores the raw counter values from the last poll
 METRIC_STATE = {}
 
 # --- Prometheus Metrics Definition ---
@@ -49,26 +50,22 @@ def get_rdma_devices():
         return []
 
 def read_counters_from_dir(path, current_counters):
-    """Reads all counter files from a given directory and adds them to the current_counters dict."""
+    """Reads all raw counter files from a given directory."""
     if not os.path.isdir(path):
         return
     try:
         for counter_name in os.listdir(path):
             if counter_name in current_counters:
-                continue # Avoid duplicates, hw_counters might have overlapping names
+                continue
             file_path = os.path.join(path, counter_name)
             try:
                 with open(file_path, 'r') as f:
-                    value = int(f.read().strip())
-                    # The data counters are in units of 4 bytes
-                    if counter_name in ['port_rcv_data', 'port_xmit_data']:
-                        value *= 4
-                    current_counters[counter_name] = value
+                    # Read the raw value directly, do not multiply here
+                    current_counters[counter_name] = int(f.read().strip())
             except (IOError, ValueError) as e:
                 logging.debug(f"Could not read or parse counter {counter_name} from {path}: {e}")
     except OSError as e:
         logging.error(f"Could not list counters in directory {path}: {e}")
-
 
 def update_metrics():
     """Scans for RDMA devices, reads counters, and updates Prometheus metrics."""
@@ -79,42 +76,60 @@ def update_metrics():
         counters_path = os.path.join(IB_PATH, device, "ports/1/counters")
         hw_counters_path = os.path.join(IB_PATH, device, "ports/1/hw_counters")
         
+        # This dictionary will hold the raw counter values
         current_counters = {}
         read_counters_from_dir(counters_path, current_counters)
         read_counters_from_dir(hw_counters_path, current_counters)
 
         # Create gauges and set values
-        for counter_name, value in current_counters.items():
+        for counter_name, raw_value in current_counters.items():
             if counter_name not in DYNAMIC_GAUGES:
                 metric_name = sanitize_metric_name(counter_name)
                 description = f'Value of RDMA counter {counter_name}'
                 DYNAMIC_GAUGES[counter_name] = Gauge(metric_name, description, ['device', 'node'])
                 logging.info(f"Discovered and created new metric: {metric_name}")
-            DYNAMIC_GAUGES[counter_name].labels(device=device, node=NODE_NAME).set(value)
+            
+            # For data counters, export total bytes for user convenience
+            if counter_name in ['port_rcv_data', 'port_xmit_data']:
+                # The gauge will show total bytes, which is more intuitive
+                DYNAMIC_GAUGES[counter_name].labels(device=device, node=NODE_NAME).set(raw_value * 4)
+            else:
+                DYNAMIC_GAUGES[counter_name].labels(device=device, node=NODE_NAME).set(raw_value)
 
-        # Calculate and set bandwidth metrics
+        # --- Bandwidth Calculation (Corrected Logic) ---
         last_state = METRIC_STATE.get(device)
         if last_state:
             delta_time = now - last_state['timestamp']
             if delta_time > 0:
                 # Receive Bandwidth
-                last_rcv = last_state['counters'].get('port_rcv_data')
-                current_rcv = current_counters.get('port_rcv_data')
-                if last_rcv is not None and current_rcv is not None:
-                    delta_bytes = current_rcv - last_rcv
-                    if delta_bytes < 0: delta_bytes = current_rcv # Handle counter wrap-around
-                    rx_bw = delta_bytes / delta_time
+                # Get raw counter values (in double words)
+                last_rcv_dwords = last_state['counters'].get('port_rcv_data')
+                current_rcv_dwords = current_counters.get('port_rcv_data')
+                if last_rcv_dwords is not None and current_rcv_dwords is not None:
+                    delta_dwords = current_rcv_dwords - last_rcv_dwords
+                    # **FIXED**: Handle 64-bit counter wrap-around correctly
+                    if delta_dwords < 0:
+                        delta_dwords += 2**64
+                    
+                    # Calculate bandwidth in bytes/sec
+                    rx_bw = (delta_dwords * 4) / delta_time
                     RDMA_RECEIVE_BANDWIDTH.labels(device=device, node=NODE_NAME).set(rx_bw)
 
                 # Transmit Bandwidth
-                last_xmit = last_state['counters'].get('port_xmit_data')
-                current_xmit = current_counters.get('port_xmit_data')
-                if last_xmit is not None and current_xmit is not None:
-                    delta_bytes = current_xmit - last_xmit
-                    if delta_bytes < 0: delta_bytes = current_xmit # Handle counter wrap-around
-                    tx_bw = delta_bytes / delta_time
+                # Get raw counter values (in double words)
+                last_xmit_dwords = last_state['counters'].get('port_xmit_data')
+                current_xmit_dwords = current_counters.get('port_xmit_data')
+                if last_xmit_dwords is not None and current_xmit_dwords is not None:
+                    delta_dwords = current_xmit_dwords - last_xmit_dwords
+                    # **FIXED**: Handle 64-bit counter wrap-around correctly
+                    if delta_dwords < 0:
+                        delta_dwords += 2**64
+                    
+                    # Calculate bandwidth in bytes/sec
+                    tx_bw = (delta_dwords * 4) / delta_time
                     RDMA_TRANSMIT_BANDWIDTH.labels(device=device, node=NODE_NAME).set(tx_bw)
 
+        # Store the current raw counters for the next calculation
         METRIC_STATE[device] = {'timestamp': now, 'counters': current_counters}
 
 def main():

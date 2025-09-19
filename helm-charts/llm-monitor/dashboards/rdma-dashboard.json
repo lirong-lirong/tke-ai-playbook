@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 35,
+  "id": 32,
   "links": [],
   "panels": [
     {
@@ -562,6 +562,6 @@
   "timepicker": {},
   "timezone": "browser",
   "title": "RDMA Monitoring",
-  "uid": "rdma-exporter-revised-1",
-  "version": 7
+  "uid": "rdma-exporter",
+  "version": 1
 }

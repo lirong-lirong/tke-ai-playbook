@@ -6,7 +6,7 @@ image:
   repository: fanjiankong-bj.tencentcloudcr.com/pengdrumli/rdma-monitor
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.0"
+  tag: "v1.1"
 
 imagePullSecrets: []
 nameOverride: ""
@@ -59,7 +59,19 @@ nodeSelector:
 # nodeSelector: {}
 
 # -- Tolerations for scheduling the exporter pods.
-tolerations: []
+tolerations:
+- key: "node.kubernetes.io/unreachable"
+  operator: "Exists"
+  effect: "NoExecute"
+  tolerationSeconds: 300
+- key: "node.kubernetes.io/not-ready"
+  operator: "Exists"
+  effect: "NoExecute"
+  tolerationSeconds: 300
+- key: "user"
+  operator: "Equal"
+  value: "besseldong"
+  effect: "NoSchedule"
 
 # -- Affinity for scheduling the exporter pods.
 affinity: {}
