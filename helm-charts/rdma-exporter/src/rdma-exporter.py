@@ -1,3 +1,5 @@
+#https://enterprise-support.nvidia.com/s/article/understanding-mlx5-linux-counters-and-status-parameters
+
 import os
 import time
 import logging
