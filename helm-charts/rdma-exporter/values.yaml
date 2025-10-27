@@ -72,6 +72,10 @@ tolerations:
   operator: "Equal"
   value: "besseldong"
   effect: "NoSchedule"
+- key: "user"
+  operator: "Equal"
+  value: "fanjiankong"
+  effect: "NoSchedule"
 
 # -- Affinity for scheduling the exporter pods.
 affinity: {}
